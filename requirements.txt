@@ -1,0 +1,7 @@
+chromadb==0.5.5
+fastapi==0.115.0
+uvicorn==0.30.6
+sentence-transformers==3.1.1
+python-dotenv==1.0.1
+pypdf==5.0.1
+markdown==3.7
