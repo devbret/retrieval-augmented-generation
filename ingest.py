@@ -21,7 +21,7 @@ def file_id(path: str) -> str:
     h.update(str(os.path.getmtime(path)).encode())
     return h.hexdigest()[:20]
 
-def main():
+def ingest_path(docs_dir: str = DOCS_DIR) -> int:
     os.makedirs(CHROMA_DIR, exist_ok=True)
 
     client = chromadb.PersistentClient(
@@ -37,7 +37,7 @@ def main():
 
     to_add_texts, to_add_ids, to_add_metadatas = [], [], []
 
-    for fpath in yield_files(DOCS_DIR):
+    for fpath in yield_files(docs_dir):
         try:
             raw = load_any(fpath)
         except Exception as e:
@@ -56,8 +56,8 @@ def main():
             to_add_metadatas.append({"source": fpath, "chunk": idx})
 
     if not to_add_texts:
-        print("No documents found to index.")
-        return
+        print(f"No documents found to index in {docs_dir}.")
+        return 0
 
     print(f"Embedding {len(to_add_texts)} chunks with {EMBED_MODEL} ...")
     embeddings = embedder.encode(to_add_texts, batch_size=64, show_progress_bar=True)
@@ -71,6 +71,11 @@ def main():
     )
 
     print(f"Done. Collection: {COLLECTION_NAME} at {CHROMA_DIR}")
+    return len(to_add_texts)
+
+def main():
+    count = ingest_path(DOCS_DIR)
+    print(f"Ingested {count} chunks from {DOCS_DIR}.")
 
 if __name__ == "__main__":
     main()
