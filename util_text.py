@@ -29,19 +29,51 @@ def load_any(path: str) -> str:
         return load_md(path)
     return load_text(path)
 
-# --- Naive Splitter ---
 def split_text(text: str, chunk_size: int = 800, overlap: int = 120) -> List[str]:
+    text = re.sub(r"\r\n", "\n", text)
     text = re.sub(r"\s+\n", "\n", text)
     text = re.sub(r"[ \t]+", " ", text)
-    tokens = text.split()
-    chunks = []
-    i = 0
-    step = max(1, chunk_size - overlap)
-    while i < len(tokens):
-        chunk = " ".join(tokens[i:i+chunk_size])
-        if chunk.strip():
-            chunks.append(chunk)
-        i += step
+
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+
+    chunks: List[str] = []
+    current: List[str] = []
+
+    def current_token_count() -> int:
+        if not current:
+            return 0
+        return sum(len(p.split()) for p in current)
+
+    def flush():
+        if current:
+            joined = " ".join(current).strip()
+            if joined:
+                chunks.append(joined)
+
+    for para in paragraphs:
+        tokens = para.split()
+        token_len = len(tokens)
+
+        if token_len > chunk_size:
+            flush()
+            i = 0
+            step = max(1, chunk_size - overlap)
+            while i < token_len:
+                sub_chunk = " ".join(tokens[i:i+chunk_size])
+                if sub_chunk.strip():
+                    chunks.append(sub_chunk)
+                i += step
+            current = []
+            continue
+
+        if current_token_count() + token_len > chunk_size:
+            flush()
+            current = [para]
+        else:
+            current.append(para)
+
+    flush()
+
     return chunks
 
 def yield_files(root: str) -> List[str]:
