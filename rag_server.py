@@ -103,22 +103,42 @@ def call_openai_like(prompt: str, max_tokens: int, temperature: float) -> str:
     return data["choices"][0]["message"]["content"]
 
 def call_ollama(prompt: str, max_tokens: int, temperature: float) -> str:
-    payload = {
+    chat_payload = {
         "model": OLLAMA_MODEL,
         "options": {"temperature": temperature, "num_predict": max_tokens},
         "messages": [
-            {"role":"system", "content": SYSTEM},
-            {"role":"user", "content": prompt},
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": prompt},
         ],
-        "stream": False
+        "stream": False,
     }
-    r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=120)
+
+    chat_url = f"{OLLAMA_BASE_URL}/api/chat"
+    r = requests.post(chat_url, json=chat_payload, timeout=120)
+
+    if r.status_code == 404:
+        gen_url = f"{OLLAMA_BASE_URL}/api/generate"
+        gen_payload = {
+            "model": OLLAMA_MODEL,
+            "prompt": f"{SYSTEM}\n\n{prompt}",
+            "options": {"temperature": temperature, "num_predict": max_tokens},
+            "stream": False,
+        }
+        r = requests.post(gen_url, json=gen_payload, timeout=120)
+        r.raise_for_status()
+        data = r.json()
+        if "response" in data:
+            return data["response"]
+        return json.dumps(data)
+
     r.raise_for_status()
     data = r.json()
+
     if "message" in data and "content" in data["message"]:
         return data["message"]["content"]
     if "choices" in data:
         return data["choices"][0]["message"]["content"]
+
     return json.dumps(data)
 
 def llm_answer(prompt: str, max_tokens: int, temperature: float) -> str:
