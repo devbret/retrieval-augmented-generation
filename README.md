@@ -1,7 +1,11 @@
-This project is a lightweight Retrieval-Augmented Generation (RAG) system designed to let you query your own documents using a local language model. The pipeline begins with `ingest.py`, which scans a `./docs` directory for files, splits them into overlapping text chunks and generates embeddings using a SentenceTransformer model.
+# Customized RAG System
 
-The second half of the project, `rag-server.py`, exposes a FastAPI service that accepts user questions and performs retrieval along with LLM answering. When a query comes in, the server encodes it into an embedding, searches the ChromaDB collection for the most relevant document chunks and then builds a prompt combining those results with the user’s question.
+This project is designed to be modular and extendable. Which makes it easy to build more advanced workflows on top of the existing foundation.
 
-Depending on configuration, the system calls either an OpenAI-like backend or a locally running Ollama model to generate an answer grounded in the retrieved context. The result includes both the final answer and citations pointing back to document sources, ensuring transparency and traceability.
+Because the ingestion and serving pipelines are cleanly separated, you can swap embedding models, add alternative text splitters, integrate rerankers or modify prompt construction without disrupting the overall architecture.
 
-Together, the ingestion and server scripts form a self-contained local RAG system for private, document-aware AI assistance.
+This separation of concerns also allows the RAG server to accept new document ingestions at any time, enabling dynamic, evolving knowledge bases that stay up to date as you add or modify files in the `./docs` directory.
+
+The system is also optimized for local, offline and privacy-preserving operation. All data remains on the user’s machine, eliminating reliance on external APIs and cloud services.
+
+When paired with a locally hosted LLM such as those served by Ollama, the result is a fully self-contained personal knowledge assistant capable of answering questions, summarizing content and surfacing insights from your private documents with zero third-party exposure. This makes the project well-suited for researchers, engineers or anyone who needs secure access to their own information through natural language queries.
