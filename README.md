@@ -1,14 +1,16 @@
 # Personal Knowledge RAG System
 
-A modular, local-first Retrieval-Augmented Generation application for building a private personal knowledge assistant.
+Self-hosted Retrieval-Augmented Generation system which turns documents into a private knowledge base accessible through a web UI.
 
 ## Application Overview
 
-The application works in two separate stages. The ingestion pipeline scans the `./docs` directory, loads supported document types, splits their contents into manageable chunks, generates embeddings and stores those chunks in a persistent Chroma vector database.
+Documents enter the system through the `./docs` directory, either uploaded from the web UI or copied manually. An indexer extracts their text, splits it into overlapping chunks, generates embeddings and stores everything in a Chroma vector database. Large batches index without blocking the app, with live progress and a cancel option.
 
-Whereas the serving pipeline exposes a FastAPI-based RAG server to accept natural language questions, then embeds each query, retrieves the most relevant document chunks and uses those chunks as context for a locally hosted language model. The server can work with either an OpenAI-compatible endpoint or an `Ollama` model.
+When you ask a question, the `FastAPI` server searches your library two ways: (1) semantic vector search catches meaning and (2) BM25 keyword index catches exact phrases, acronyms and document numbers. The two results are combined, re-ordered and are handed to a locally hosted language model. Answers stream back token by token with numbered citations.
 
-Because ingestion and serving are separated, the project is easy to extend. You can swap embedding models, adjust chunking behavior, filter answers by document source or modify prompt construction without disrupting the rest of the system. New or updated files can be added to the `./docs` directory and re-ingested.
+The built-in web UI is the primary face of the system. It handles drag-and-drop uploads, follow-up questions, clickable citations to reveal the exact passage behind every claim and chat exports to CSV, JSON or HTML. Because the server binds to your network, the whole system can run on a dedicated AI PC while you use it from a browser on any other machine.
+
+The pieces stay modular and configurable. Embedding model, reranker, chunk sizes, context window and the folder watcher are all set in the `.env`. Also answers can be restricted to specific documents from the UI and files added to `./docs` outside the UI are picked up by the automatic folder watcher.
 
 ## Basic Setup Instructions
 
@@ -19,6 +21,10 @@ Below are the required software programs and instructions for installing and usi
 - [Git](https://git-scm.com/downloads)
 
 - [Python](https://www.python.org/downloads/)
+
+- [Tesseract](https://github.com/tesseract-ocr/tesseract)
+
+- [Ollama](https://ollama.com/download)
 
 ### Steps For Use
 
@@ -36,30 +42,26 @@ Below are the required software programs and instructions for installing and usi
 
 7. Install the needed dependencies: `pip install -r requirements.txt`
 
-8. Add your files to the `docs` directory within this repo
+8. Convert the `.env.template` file into a `.env` file: `cp .env.template .env`
 
-9. Convert the `.env.template` file into a `.env` file: `cp .env.template .env`
+9. Add values to the `.env` file: `nano .env`
 
-10. Add values to the `.env` file: `nano .env`
+10. Start the RAG server: `uvicorn rag_server:app --host 0.0.0.0 --port 47821`
 
-11. Launch your local LLM using Ollama: `ollama run mistral`
+11. Open the web UI in a browser: `http://127.0.0.1:47821`
 
-12. Ingest your documents with the following command: `python3 ingest.py`
-
-13. Start the RAG server: `uvicorn rag_server:app --reload`
-
-14. Confirm the RAG API is working correctly: `GET http://127.0.0.1:8000`
+12. Add your files via the web UI and begin chatting
 
 ## Other Considerations
 
 This project repo is intended to demonstrate an ability to do the following:
 
-- Turn a local folder of private documents into a searchable knowledge base
+- Turn a folder of personal documents into a private searchable knowledge base
 
-- Enable users to ask natural language questions and receive answers grounded in their own files
+- Answer natural language questions with streamed responses which cite their sources
 
-- Keep the ingestion, retrieval and language model serving layers modular so each part can be easily upgraded
+- Combine semantic vector search, BM25 keyword matching and reranking
 
-- Operate a fully local RAG assistant paired with Ollama or another local LLM backend
+- Serve a full web UI to any browser on the local network without sending data beyond it
 
 If you have any questions or would like to collaborate, please reach out either on GitHub or via [my website](https://bretbernhoft.com/).

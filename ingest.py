@@ -2,6 +2,10 @@ import os, hashlib
 from dotenv import load_dotenv
 load_dotenv()
 
+import posthog
+posthog.disabled = True
+posthog.capture = lambda *args, **kwargs: None
+
 import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
@@ -17,6 +21,13 @@ DOCS_DIR = "./docs"
 
 def file_id(path: str) -> str:
     h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()[:20]
+
+def legacy_file_id(path: str) -> str:
+    h = hashlib.sha256()
     h.update(os.path.abspath(path).encode())
     h.update(str(os.path.getmtime(path)).encode())
     return h.hexdigest()[:20]
@@ -25,7 +36,8 @@ def ingest_path(docs_dir: str = DOCS_DIR) -> int:
     os.makedirs(CHROMA_DIR, exist_ok=True)
 
     client = chromadb.PersistentClient(
-        path=CHROMA_DIR, settings=Settings(allow_reset=False)
+        path=CHROMA_DIR,
+        settings=Settings(allow_reset=False, anonymized_telemetry=False),
     )
 
     collection = client.get_or_create_collection(
@@ -47,6 +59,8 @@ def ingest_path(docs_dir: str = DOCS_DIR) -> int:
         chunks = split_text(raw, CHUNK_SIZE, CHUNK_OVERLAP)
         if not chunks:
             continue
+
+        collection.delete(where={"source": fpath})
 
         base_id = file_id(fpath)
         for idx, ch in enumerate(chunks):

@@ -1,0 +1,2226 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Personal RAG</title>
+    <link href="/static/vendor/katex/katex.min.css" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #f5f5f4;
+        --panel: #ffffff;
+        --border: #e2e0dd;
+        --text: #1c1b1a;
+        --muted: #6f6b66;
+        --accent: #2563eb;
+        --accent-text: #ffffff;
+        --user-bubble: #2563eb;
+        --user-text: #ffffff;
+        --bot-bubble: #ffffff;
+        --danger: #b91c1c;
+        --ok: #15803d;
+        --syn-keyword: #8a3fa0;
+        --syn-string: #297a3a;
+        --syn-number: #b5560a;
+        --syn-comment: #8a93a3;
+        --syn-function: #2f6fd0;
+        --syn-title: #9a6700;
+        --syn-builtin: #0b7285;
+        --syn-literal: #c0341d;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #16181d;
+          --panel: #1f2229;
+          --border: #33363e;
+          --text: #e8e6e3;
+          --muted: #9a968f;
+          --accent: #4f83f1;
+          --user-bubble: #2f56b3;
+          --user-text: #f0f4ff;
+          --bot-bubble: #262a32;
+          --danger: #ef6a6a;
+          --ok: #4ade80;
+          --syn-keyword: #c792ea;
+          --syn-string: #c3e88d;
+          --syn-number: #f78c6c;
+          --syn-comment: #6b7689;
+          --syn-function: #82aaff;
+          --syn-title: #ffcb6b;
+          --syn-builtin: #89ddff;
+          --syn-literal: #ff5370;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font:
+          15px/1.5 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        flex: 0 0 auto;
+      }
+      header h1 {
+        font-size: 16px;
+        margin: 0;
+        font-weight: 600;
+      }
+      #status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      #status-dot.up {
+        background: var(--ok);
+      }
+      #status-dot.down {
+        background: var(--danger);
+      }
+      #status-dot.warn {
+        background: #d97706;
+      }
+      #status-label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      #clear-chat,
+      #export-btn {
+        border: 1px solid var(--border);
+        background: none;
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 4px 10px;
+        font: inherit;
+        font-size: 12.5px;
+        cursor: pointer;
+      }
+      #clear-chat:hover {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+      #export-wrap {
+        margin-left: auto;
+        position: relative;
+      }
+      #export-btn:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      #export-menu {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 6px);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+        display: none;
+        z-index: 60;
+        min-width: 110px;
+        padding: 4px;
+      }
+      #export-menu.open {
+        display: block;
+      }
+      #export-menu button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: none;
+        color: var(--text);
+        padding: 6px 10px;
+        border-radius: 6px;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      #export-menu button:hover {
+        background: color-mix(in srgb, var(--text) 7%, transparent);
+      }
+
+      main {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+
+      aside {
+        width: 300px;
+        min-width: 220px;
+        flex: 0 0 auto;
+        border-right: 1px solid var(--border);
+        background: var(--panel);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      #sidebar-resizer {
+        flex: 0 0 6px;
+        margin-left: -4px;
+        cursor: col-resize;
+        z-index: 5;
+        background: transparent;
+        transition: background 0.15s;
+      }
+      #sidebar-resizer:hover,
+      #sidebar-resizer.dragging {
+        background: color-mix(in srgb, var(--accent) 45%, transparent);
+      }
+      aside h2 {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 14px 14px 6px;
+      }
+      .h2-links {
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: 400;
+        font-size: 11.5px;
+      }
+      .h2-links a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .h2-links a:hover {
+        text-decoration: underline;
+      }
+      #dropzone {
+        margin: 0 14px;
+        border: 1.5px dashed var(--border);
+        border-radius: 10px;
+        padding: 18px 12px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+        cursor: pointer;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      #dropzone.drag {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+      #dropzone strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      #upload-status {
+        margin: 8px 14px 0;
+        font-size: 12.5px;
+        color: var(--muted);
+        transition: opacity 0.7s;
+      }
+      #upload-status.fading {
+        opacity: 0;
+      }
+      .up-progress {
+        margin-top: 2px;
+      }
+      .up-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 5px;
+      }
+      .up-cancel {
+        flex: 0 0 auto;
+        border: none;
+        background: none;
+        color: var(--muted);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        padding: 1px 6px;
+        border-radius: 5px;
+      }
+      .up-cancel:hover {
+        color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 10%, transparent);
+      }
+      .up-track {
+        height: 6px;
+        border-radius: 3px;
+        background: color-mix(in srgb, var(--text) 10%, transparent);
+        overflow: hidden;
+      }
+      .up-bar {
+        height: 100%;
+        width: 0;
+        border-radius: 3px;
+        background: var(--accent);
+        transition: width 0.2s;
+      }
+      .up-bar.indeterminate {
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--accent),
+          transparent
+        );
+        background-size: 40% 100%;
+        background-repeat: no-repeat;
+        animation: up-slide 1.2s linear infinite;
+      }
+      @keyframes up-slide {
+        from {
+          background-position: -50% 0;
+        }
+        to {
+          background-position: 150% 0;
+        }
+      }
+      .up-note {
+        margin: 2px 0 4px;
+      }
+      .up-file {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 9px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--bg);
+        margin-top: 6px;
+        min-width: 0;
+      }
+      .up-icon {
+        flex: 0 0 auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .up-file.ok .up-icon {
+        color: var(--ok);
+        background: color-mix(in srgb, var(--ok) 15%, transparent);
+      }
+      .up-file.err .up-icon {
+        color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 15%, transparent);
+      }
+      .up-meta {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .up-name {
+        color: var(--text);
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .up-desc {
+        color: var(--muted);
+      }
+      .up-file.err .up-desc {
+        color: var(--danger);
+      }
+
+      #doc-list {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        margin: 6px 0 0;
+        padding: 0 8px 12px;
+        list-style: none;
+      }
+      #doc-list li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        font-size: 13.5px;
+      }
+      #doc-list li:hover {
+        background: color-mix(in srgb, var(--text) 5%, transparent);
+      }
+      #doc-list label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1 1 auto;
+        min-width: 0;
+        cursor: pointer;
+      }
+      #doc-list .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #doc-list button {
+        flex: 0 0 auto;
+        border: none;
+        background: none;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 14px;
+        padding: 2px 4px;
+        border-radius: 5px;
+      }
+      #doc-list button:hover {
+        color: var(--danger);
+      }
+      #delete-all {
+        flex: 0 0 auto;
+        margin: 4px 14px 14px;
+        border: 1px solid var(--border);
+        background: none;
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 5px 10px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      #delete-all:hover {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+
+      #chat-col {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      #messages {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 20px 20px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .msg {
+        max-width: 76%;
+      }
+      .msg.user {
+        align-self: flex-end;
+      }
+      .msg.bot {
+        align-self: flex-start;
+      }
+      .bubble {
+        padding: 10px 14px;
+        border-radius: 14px;
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+      }
+      .msg.user .bubble {
+        background: var(--user-bubble);
+        color: var(--user-text);
+        border-bottom-right-radius: 4px;
+      }
+      .msg.bot .bubble {
+        background: var(--bot-bubble);
+        border: 1px solid var(--border);
+        border-bottom-left-radius: 4px;
+      }
+      .msg.bot .bubble.error {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+      .cite {
+        position: relative;
+        color: var(--accent);
+        font-weight: 600;
+        cursor: help;
+      }
+      .cite::after {
+        content: attr(data-tip);
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        transform: translateX(-50%);
+        width: max-content;
+        max-width: 320px;
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.4;
+        white-space: pre-line;
+        text-align: left;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.12s;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .cite::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 4px);
+        transform: translateX(-50%) rotate(45deg);
+        width: 8px;
+        height: 8px;
+        background: var(--panel);
+        border-right: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.12s;
+        pointer-events: none;
+        z-index: 11;
+      }
+      .cite:hover::after,
+      .cite:hover::before {
+        opacity: 1;
+        visibility: visible;
+      }
+      .empty-hint {
+        margin: auto;
+        text-align: center;
+        color: var(--muted);
+        font-size: 14px;
+        max-width: 380px;
+      }
+      .typing {
+        color: var(--muted);
+        font-style: italic;
+      }
+
+      .bubble.md {
+        white-space: normal;
+      }
+      .bubble.md > :first-child {
+        margin-top: 0;
+      }
+      .bubble.md > :last-child {
+        margin-bottom: 0;
+      }
+      .bubble.md p,
+      .bubble.md ul,
+      .bubble.md ol,
+      .bubble.md table,
+      .bubble.md blockquote {
+        margin: 8px 0;
+      }
+      .bubble.md h1,
+      .bubble.md h2,
+      .bubble.md h3,
+      .bubble.md h4 {
+        margin: 14px 0 6px;
+        line-height: 1.3;
+      }
+      .bubble.md h1 {
+        font-size: 1.25em;
+      }
+      .bubble.md h2 {
+        font-size: 1.15em;
+      }
+      .bubble.md h3 {
+        font-size: 1.05em;
+      }
+      .bubble.md ul,
+      .bubble.md ol {
+        padding-left: 22px;
+      }
+      .bubble.md li {
+        margin: 3px 0;
+      }
+      .bubble.md code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.9em;
+        background: color-mix(in srgb, var(--text) 8%, transparent);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+      .bubble.md pre {
+        margin: 8px 0;
+        background: color-mix(in srgb, var(--text) 5%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        overflow-x: auto;
+      }
+      .bubble.md pre code {
+        background: none;
+        padding: 0;
+        font-size: 12.5px;
+      }
+      .bubble.md blockquote {
+        border-left: 3px solid var(--border);
+        padding-left: 10px;
+        color: var(--muted);
+      }
+      .bubble.md table {
+        border-collapse: collapse;
+        display: block;
+        overflow-x: auto;
+      }
+      .bubble.md th,
+      .bubble.md td {
+        border: 1px solid var(--border);
+        padding: 4px 8px;
+      }
+      .bubble.md a {
+        color: var(--accent);
+      }
+      .bubble.md hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 10px 0;
+      }
+      .bubble.md .katex-display {
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+
+      .code-block {
+        margin: 8px 0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .code-block pre {
+        margin: 0;
+        border: none;
+        border-radius: 0;
+      }
+      .code-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 10px;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in srgb, var(--text) 4%, transparent);
+      }
+      .code-lang {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 11px;
+        text-transform: lowercase;
+        letter-spacing: 0.03em;
+        color: var(--muted);
+      }
+      .code-copy {
+        border: none;
+        background: none;
+        color: var(--muted);
+        font-size: 11.5px;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 5px;
+      }
+      .code-copy:hover {
+        color: var(--text);
+        background: color-mix(in srgb, var(--text) 8%, transparent);
+      }
+
+      .hljs-keyword,
+      .hljs-selector-tag,
+      .hljs-meta-keyword,
+      .hljs-doctag {
+        color: var(--syn-keyword);
+      }
+      .hljs-string,
+      .hljs-regexp,
+      .hljs-addition {
+        color: var(--syn-string);
+      }
+      .hljs-number,
+      .hljs-symbol,
+      .hljs-bullet {
+        color: var(--syn-number);
+      }
+      .hljs-comment,
+      .hljs-quote {
+        color: var(--syn-comment);
+        font-style: italic;
+      }
+      .hljs-title,
+      .hljs-section,
+      .hljs-name {
+        color: var(--syn-title);
+      }
+      .hljs-function .hljs-title,
+      .hljs-title.function_,
+      .hljs-attr,
+      .hljs-attribute,
+      .hljs-variable {
+        color: var(--syn-function);
+      }
+      .hljs-built_in,
+      .hljs-class .hljs-title,
+      .hljs-type {
+        color: var(--syn-builtin);
+      }
+      .hljs-literal,
+      .hljs-deletion,
+      .hljs-meta {
+        color: var(--syn-literal);
+      }
+
+      #modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 24px;
+      }
+      #modal-overlay.open {
+        display: flex;
+      }
+      #modal {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        max-width: 760px;
+        width: 100%;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+      }
+      #modal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      #modal-title {
+        font-weight: 600;
+        font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #modal-close {
+        border: none;
+        background: none;
+        color: var(--muted);
+        font-size: 15px;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+      #modal-close:hover {
+        color: var(--danger);
+      }
+      #modal-body {
+        padding: 14px 16px;
+        overflow-y: auto;
+        font-size: 13.5px;
+        line-height: 1.55;
+      }
+      .passage + .passage {
+        margin-top: 14px;
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+      }
+      .passage-meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 5px;
+      }
+      .passage-text {
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+      }
+      .modal-btn {
+        border: 1px solid var(--border);
+        background: none;
+        color: var(--accent);
+        border-radius: 7px;
+        padding: 3px 9px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .modal-btn:hover {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+
+      #composer {
+        flex: 0 0 auto;
+        padding: 10px 20px 14px;
+        border-top: 1px solid var(--border);
+        background: var(--panel);
+      }
+      #composer form {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+      }
+      #question {
+        flex: 1 1 auto;
+        resize: none;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 9px 12px;
+        font: inherit;
+        background: var(--bg);
+        color: var(--text);
+        max-height: 140px;
+      }
+      #question:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+      }
+      #send {
+        border: none;
+        background: var(--accent);
+        color: var(--accent-text);
+        font: inherit;
+        font-weight: 600;
+        padding: 9px 18px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      #send:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #options {
+        display: flex;
+        gap: 16px;
+        margin-top: 8px;
+        font-size: 12.5px;
+        color: var(--muted);
+        flex-wrap: wrap;
+      }
+      #options label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      #options select,
+      #options input {
+        font: inherit;
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 2px 5px;
+      }
+      #options input[type="number"] {
+        width: 60px;
+      }
+
+      @media (max-width: 720px) {
+        main {
+          flex-direction: column;
+        }
+        aside {
+          width: 100% !important;
+          max-height: 40vh;
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+        }
+        #sidebar-resizer {
+          display: none;
+        }
+        .msg {
+          max-width: 92%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Personal RAG</h1>
+      <span id="status-dot"></span>
+      <span id="status-label">connecting…</span>
+      <div id="export-wrap">
+        <button id="export-btn" type="button" title="Download this chat">
+          Export ▾
+        </button>
+        <div id="export-menu">
+          <button type="button" data-fmt="csv">CSV</button>
+          <button type="button" data-fmt="json">JSON</button>
+          <button type="button" data-fmt="html">HTML</button>
+        </div>
+      </div>
+      <button id="clear-chat" type="button" title="Clear the chat history">
+        Clear chat
+      </button>
+    </header>
+
+    <main>
+      <aside>
+        <h2>
+          Upload
+          <span class="h2-links">
+            <a
+              href="#"
+              id="rescan"
+              title="Index files copied into the docs folder by hand"
+              >re-scan folder</a
+            >
+          </span>
+        </h2>
+        <div id="dropzone">
+          <strong>Drop files here</strong> or click to browse<br />
+          .txt · .md · .pdf · .csv · .json · .html<br />
+          <span style="font-size: 11.5px"
+            >Files copied into the docs folder are indexed automatically.</span
+          >
+        </div>
+        <input
+          type="file"
+          id="file-input"
+          multiple
+          hidden
+          accept=".txt,.md,.markdown,.pdf,.csv,.json,.html,.htm,.log,.rst"
+        />
+        <div id="upload-status"></div>
+
+        <h2>
+          Documents
+          <span class="h2-links">
+            <a href="#" id="filter-all">all</a> ·
+            <a href="#" id="filter-none">none</a>
+          </span>
+        </h2>
+        <ul id="doc-list"></ul>
+        <button id="delete-all" type="button" hidden>
+          Delete all documents
+        </button>
+      </aside>
+
+      <div
+        id="sidebar-resizer"
+        title="Drag to resize · double-click to reset"
+      ></div>
+
+      <div id="chat-col">
+        <div id="messages">
+          <div class="empty-hint" id="empty-hint">
+            Upload documents on the left, then ask questions about them here.
+            Answers are grounded in your files and cite their sources.
+          </div>
+        </div>
+        <div id="composer">
+          <form id="ask-form">
+            <textarea
+              id="question"
+              rows="1"
+              placeholder="Ask about your documents… (Enter to send, Shift+Enter for newline)"
+            ></textarea>
+            <button id="send" type="submit">Send</button>
+          </form>
+          <div id="options">
+            <label
+              >Min score
+              <input
+                id="opt-minscore"
+                type="number"
+                min="0"
+                max="1"
+                step="0.05"
+                value="0"
+              />
+            </label>
+            <label
+              >Style
+              <select id="opt-style">
+                <option value="default" selected>Default</option>
+                <option value="bullets">Bullets</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div id="modal-overlay">
+      <div id="modal">
+        <div id="modal-head">
+          <span id="modal-title"></span>
+          <button id="modal-close" type="button" title="Close">✕</button>
+        </div>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <script src="/static/vendor/marked.min.js"></script>
+    <script src="/static/vendor/marked-footnote.min.js"></script>
+    <script src="/static/vendor/purify.min.js"></script>
+    <script src="/static/vendor/highlight.min.js"></script>
+    <script src="/static/vendor/katex/katex.min.js"></script>
+    <script>
+      "use strict";
+
+      const $ = (id) => document.getElementById(id);
+      const messagesEl = $("messages");
+      const docListEl = $("doc-list");
+      const uploadStatusEl = $("upload-status");
+
+      function escapeHtml(s) {
+        return s.replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      }
+
+      function baseName(path) {
+        return path.split("/").pop();
+      }
+
+      marked.setOptions({ gfm: true, breaks: true });
+      marked.use(markedFootnote());
+
+      function renderMathHtml(tex, displayMode) {
+        if (typeof katex === "undefined") return null;
+        try {
+          return katex.renderToString(tex, {
+            displayMode,
+            throwOnError: false,
+            output: "html",
+          });
+        } catch (err) {
+          return null;
+        }
+      }
+
+      const blockMathExtension = {
+        name: "blockMath",
+        level: "block",
+        start(src) {
+          const match = src.match(/(^|\n) {0,3}(?:\$\$|\\\[)/);
+          return match ? match.index + match[1].length : undefined;
+        },
+        tokenizer(src) {
+          const match = src.match(
+            /^ {0,3}(?:\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\])[ \t]*(?:\n+|$)/,
+          );
+          if (!match) return undefined;
+          return {
+            type: "blockMath",
+            raw: match[0],
+            text: (match[1] ?? match[2]).trim(),
+          };
+        },
+        renderer(token) {
+          const html = renderMathHtml(token.text, true);
+          return html ?? `<pre><code>${escapeHtml(token.text)}</code></pre>`;
+        },
+      };
+
+      const inlineMathExtension = {
+        name: "inlineMath",
+        level: "inline",
+        start(src) {
+          const match = src.match(/\$|\\\(|\\\[/);
+          return match ? match.index : undefined;
+        },
+        tokenizer(src) {
+          let match = src.match(/^\\\(([\s\S]+?)\\\)/);
+          if (match) {
+            return {
+              type: "inlineMath",
+              raw: match[0],
+              text: match[1].trim(),
+              display: false,
+            };
+          }
+          match = src.match(/^\\\[([\s\S]+?)\\\]/);
+          if (match) {
+            return {
+              type: "inlineMath",
+              raw: match[0],
+              text: match[1].trim(),
+              display: true,
+            };
+          }
+          match = src.match(/^\$\$([\s\S]+?)\$\$/);
+          if (match) {
+            return {
+              type: "inlineMath",
+              raw: match[0],
+              text: match[1].trim(),
+              display: true,
+            };
+          }
+          match = src.match(/^\$([^$\n]+?)\$(?!\d)/);
+          if (match && !/^\s/.test(match[1]) && !/\s$/.test(match[1])) {
+            return {
+              type: "inlineMath",
+              raw: match[0],
+              text: match[1],
+              display: false,
+            };
+          }
+          return undefined;
+        },
+        renderer(token) {
+          const html = renderMathHtml(token.text, token.display);
+          return html ?? `<code>${escapeHtml(token.raw)}</code>`;
+        },
+      };
+
+      marked.use({ extensions: [blockMathExtension, inlineMathExtension] });
+
+      function ensureSeparatorBreaks(markdown) {
+        const lines = (markdown || "").split("\n");
+        const out = [];
+        let inFence = false;
+        let fenceChar = "";
+        const isDashRule = (line) => /^ {0,3}-{3,}\s*$/.test(line);
+        for (const line of lines) {
+          const fence = line.match(/^ {0,3}(`|~){3,}/);
+          if (fence) {
+            const ch = fence[1];
+            if (!inFence) {
+              inFence = true;
+              fenceChar = ch;
+            } else if (ch === fenceChar) {
+              inFence = false;
+              fenceChar = "";
+            }
+            out.push(line);
+            continue;
+          }
+          if (!inFence && isDashRule(line)) {
+            const prev = out.length ? out[out.length - 1] : "";
+            if (prev.trim() !== "") out.push("");
+          }
+          out.push(line);
+        }
+        return out.join("\n");
+      }
+
+      marked.use({ hooks: { preprocess: ensureSeparatorBreaks } });
+
+      DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+        if (node.tagName !== "A") return;
+        const href = node.getAttribute("href") || "";
+        if (/^https?:\/\//i.test(href)) {
+          node.setAttribute("target", "_blank");
+          node.setAttribute("rel", "noopener noreferrer");
+        }
+      });
+
+      function renderMarkdown(md = "") {
+        const rawHtml = marked.parse(md || "");
+        return DOMPurify.sanitize(rawHtml);
+      }
+
+      function enhanceCodeBlocks(root) {
+        root.querySelectorAll("pre > code").forEach((code) => {
+          const pre = code.parentElement;
+          if (!pre || pre.dataset.enhanced) return;
+          pre.dataset.enhanced = "1";
+
+          const langMatch = (code.className || "").match(/language-([\w+-]+)/i);
+          const lang = langMatch ? langMatch[1] : "";
+
+          if (window.hljs) {
+            try {
+              hljs.highlightElement(code);
+            } catch {}
+          }
+
+          const wrap = document.createElement("div");
+          wrap.className = "code-block";
+          pre.parentNode.insertBefore(wrap, pre);
+
+          const head = document.createElement("div");
+          head.className = "code-head";
+
+          const label = document.createElement("span");
+          label.className = "code-lang";
+          label.textContent = lang || "code";
+
+          const copy = document.createElement("button");
+          copy.className = "code-copy";
+          copy.type = "button";
+          copy.textContent = "copy";
+          copy.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(code.textContent);
+              copy.textContent = "copied";
+              setTimeout(() => (copy.textContent = "copy"), 1500);
+            } catch {}
+          });
+
+          head.appendChild(label);
+          head.appendChild(copy);
+          wrap.appendChild(head);
+          wrap.appendChild(pre);
+        });
+      }
+
+      function renderAnswerInto(container, markdownText) {
+        const bubble = document.createElement("div");
+        bubble.className = "bubble md";
+        bubble.innerHTML = renderMarkdown(markdownText);
+        enhanceCodeBlocks(bubble);
+        container.appendChild(bubble);
+        return bubble;
+      }
+
+      function applyCitationTooltips(root, sources) {
+        if (!sources || !sources.length) return;
+        const byId = new Map(
+          sources.map((s) => [
+            s.id,
+            `${baseName(s.source)}\nchunk ${s.chunk} · score ${s.score.toFixed(2)}`,
+          ]),
+        );
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const candidates = [];
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          if (node.parentElement.closest("code, pre, .katex, .cite")) continue;
+          if (/\[\d+(?:\s*,\s*\d+)*\]/.test(node.nodeValue))
+            candidates.push(node);
+        }
+        for (const node of candidates) {
+          const text = node.nodeValue;
+          const re = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+          const frag = document.createDocumentFragment();
+          let last = 0;
+          let match;
+          while ((match = re.exec(text))) {
+            const ids = match[1].split(",").map((x) => parseInt(x.trim(), 10));
+            const tips = ids.map((id) => byId.get(id)).filter(Boolean);
+            if (!tips.length) continue;
+            frag.appendChild(
+              document.createTextNode(text.slice(last, match.index)),
+            );
+            const span = document.createElement("span");
+            span.className = "cite";
+            span.textContent = match[0];
+            span.setAttribute(
+              "data-tip",
+              tips.join("\n\n") + "\n\nclick to read the passage",
+            );
+            span.addEventListener("click", () => showPassages(ids, sources));
+            frag.appendChild(span);
+            last = match.index + match[0].length;
+          }
+          if (last === 0) continue;
+          frag.appendChild(document.createTextNode(text.slice(last)));
+          node.parentNode.replaceChild(frag, node);
+        }
+      }
+
+      const modalOverlay = $("modal-overlay");
+      const modalTitle = $("modal-title");
+      const modalBody = $("modal-body");
+
+      function openModal(title) {
+        modalTitle.textContent = title;
+        modalBody.innerHTML = "";
+        modalOverlay.classList.add("open");
+      }
+      function closeModal() {
+        modalOverlay.classList.remove("open");
+      }
+      $("modal-close").addEventListener("click", closeModal);
+      modalOverlay.addEventListener("click", (e) => {
+        if (e.target === modalOverlay) closeModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+      });
+
+      function showPassages(ids, sources) {
+        const byId = new Map(sources.map((s) => [s.id, s]));
+        const picked = ids.map((id) => byId.get(id)).filter(Boolean);
+        if (!picked.length) return;
+        openModal(
+          picked.length === 1 ? `Passage [${picked[0].id}]` : "Cited passages",
+        );
+        for (const s of picked) {
+          const div = document.createElement("div");
+          div.className = "passage";
+          const meta = document.createElement("div");
+          meta.className = "passage-meta";
+          meta.textContent = `[${s.id}] ${baseName(s.source)} · chunk ${s.chunk} · score ${s.score.toFixed(2)}`;
+          const body = document.createElement("div");
+          body.className = "passage-text";
+          body.textContent =
+            s.text || "(passage text is not available for this message)";
+          div.appendChild(meta);
+          div.appendChild(body);
+          modalBody.appendChild(div);
+        }
+      }
+
+      async function openDocPreview(source) {
+        openModal(baseName(source));
+        modalBody.textContent = "Loading extracted text…";
+        try {
+          const r = await fetch(
+            `/document-text?source=${encodeURIComponent(source)}`,
+          );
+          if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+          const j = await r.json();
+          modalBody.innerHTML = "";
+
+          const head = document.createElement("div");
+          head.className = "passage-meta";
+          head.style.display = "flex";
+          head.style.justifyContent = "space-between";
+          head.style.alignItems = "center";
+          const meta = document.createElement("span");
+          meta.textContent = `${j.chunks} chunk${j.chunks === 1 ? "" : "s"} indexed${j.truncated ? " · preview truncated" : ""}`;
+          const sumBtn = document.createElement("button");
+          sumBtn.className = "modal-btn";
+          sumBtn.type = "button";
+          sumBtn.textContent = "Summarize document";
+          sumBtn.addEventListener("click", () => summarizeDoc(source));
+          head.appendChild(meta);
+          head.appendChild(sumBtn);
+
+          const body = document.createElement("div");
+          body.className = "passage-text";
+          body.textContent = j.text;
+          modalBody.appendChild(head);
+          modalBody.appendChild(body);
+        } catch (e) {
+          modalBody.textContent = `Could not load text: ${e.message}`;
+        }
+      }
+
+      async function summarizeDoc(source) {
+        if (sendBtn.disabled) return;
+        closeModal();
+        const label = `Summarize “${baseName(source)}”`;
+        addMessage("user", `<div class="bubble">${escapeHtml(label)}</div>`);
+        pushHistory({ role: "user", text: label });
+        const pending = addMessage(
+          "bot",
+          `<div class="bubble typing">Summarizing…</div>`,
+        );
+        const typingEl = pending.querySelector(".typing");
+        const t0 = Date.now();
+        const timer = setInterval(() => {
+          typingEl.textContent = `Summarizing… ${Math.round((Date.now() - t0) / 1000)}s`;
+        }, 1000);
+        sendBtn.disabled = true;
+        try {
+          const r = await fetch("/summarize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source }),
+          });
+          if (!r.ok || !r.body) {
+            const bodyText = await r.text();
+            let msg;
+            try {
+              msg = JSON.parse(bodyText).detail;
+            } catch {}
+            throw new Error(msg || bodyText.slice(0, 300) || r.statusText);
+          }
+          const { answer } = await streamNdjsonInto(pending, r, timer);
+          if (!answer) throw new Error("The model returned an empty summary.");
+          pending.innerHTML = "";
+          renderAnswerInto(pending, answer);
+          pushHistory({ role: "bot", text: answer });
+        } catch (err) {
+          pending.innerHTML = `<div class="bubble error">Summarize failed: ${escapeHtml(err.message)}</div>`;
+          pushHistory({
+            role: "bot",
+            text: `Summarize failed: ${err.message}`,
+            error: true,
+          });
+        } finally {
+          clearInterval(timer);
+          sendBtn.disabled = false;
+          stickToBottom(true);
+          questionEl.focus();
+        }
+      }
+
+      async function checkHealth() {
+        const dot = $("status-dot"),
+          label = $("status-label");
+        try {
+          const r = await fetch("/health");
+          const j = await r.json();
+          if (j.llm && j.llm.reachable === false) {
+            dot.className = "warn";
+            label.textContent = `can't reach Ollama, is the AI PC up? · ${j.documents} docs`;
+          } else if (j.llm && j.llm.model_available === false) {
+            dot.className = "warn";
+            label.textContent = `model "${j.model}" not found on Ollama, check .env`;
+          } else {
+            dot.className = "up";
+            label.textContent = j.model
+              ? `online · ${j.model} · ${j.documents} docs · ${j.chunks} chunks`
+              : `online · collection: ${j.collection}`;
+          }
+          if (j.indexing && !ingestPollTimer) startIngestPolling();
+        } catch {
+          dot.className = "down";
+          label.textContent = "server unreachable";
+        }
+      }
+      checkHealth();
+      setInterval(checkHealth, 15000);
+
+      async function refreshDocs() {
+        let j;
+        try {
+          const r = await fetch("/documents");
+          j = await r.json();
+        } catch {
+          docListEl.innerHTML =
+            '<li style="color:var(--muted)">Could not load documents.</li>';
+          return;
+        }
+        const checked = new Set(
+          [...docListEl.querySelectorAll("input:checked")].map((i) => i.value),
+        );
+        docListEl.innerHTML = "";
+        $("delete-all").hidden = !j.documents.length;
+        if (!j.documents.length) {
+          docListEl.innerHTML =
+            '<li style="color:var(--muted)">No documents ingested yet.</li>';
+          return;
+        }
+        for (const d of j.documents) {
+          const li = document.createElement("li");
+          li.innerHTML = `
+      <label title="${escapeHtml(d.source)}">
+        <input type="checkbox" value="${escapeHtml(d.source)}"
+               ${checked.has(d.source) ? "checked" : ""}>
+        <span class="name">${escapeHtml(baseName(d.source))}</span>
+      </label>
+      <button class="doc-view" title="View extracted text">👁</button>
+      <button class="doc-del" title="Delete document">✕</button>`;
+          li.querySelector(".doc-view").addEventListener("click", () =>
+            openDocPreview(d.source),
+          );
+          li.querySelector(".doc-del").addEventListener("click", () =>
+            deleteDoc(d.source),
+          );
+          docListEl.appendChild(li);
+        }
+      }
+
+      async function deleteDoc(source) {
+        if (!confirm(`Delete "${baseName(source)}" from the knowledge base?`))
+          return;
+        try {
+          const r = await fetch(
+            `/documents?source=${encodeURIComponent(source)}`,
+            { method: "DELETE" },
+          );
+          if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+        } catch (e) {
+          alert(`Delete failed: ${e.message}`);
+        }
+        refreshDocs();
+        checkHealth();
+      }
+      refreshDocs();
+
+      function setAllFilters(checked) {
+        docListEl
+          .querySelectorAll("input[type=checkbox]")
+          .forEach((cb) => (cb.checked = checked));
+      }
+      $("filter-all").addEventListener("click", (e) => {
+        e.preventDefault();
+        setAllFilters(true);
+      });
+      $("filter-none").addEventListener("click", (e) => {
+        e.preventDefault();
+        setAllFilters(false);
+      });
+
+      $("delete-all").addEventListener("click", async () => {
+        const count = docListEl.querySelectorAll("input[type=checkbox]").length;
+        if (
+          !confirm(
+            `Delete all ${count} document${count === 1 ? "" : "s"} from the knowledge base AND remove their files from the docs folder? This cannot be undone.`,
+          )
+        )
+          return;
+        try {
+          const r = await fetch("/documents/all", { method: "DELETE" });
+          if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+          const j = await r.json();
+          showUploadResults(
+            "",
+            `Deleted ${j.documents_removed} document${j.documents_removed === 1 ? "" : "s"} (${j.chunks_removed} chunks).`,
+          );
+        } catch (e) {
+          alert(`Delete all failed: ${e.message}`);
+        }
+        refreshDocs();
+        checkHealth();
+      });
+
+      $("rescan").addEventListener("click", async (e) => {
+        e.preventDefault();
+        showUploadProgress("Scanning the docs folder…", null);
+        try {
+          const r = await fetch("/rescan", { method: "POST" });
+          if (!r.ok) throw new Error(r.statusText);
+          const j = await r.json();
+          if (j.queued > 0) {
+            startIngestPolling();
+          } else {
+            showUploadResults(
+              "",
+              `Everything is up to date (${j.unchanged} file${j.unchanged === 1 ? "" : "s"} already indexed).`,
+            );
+          }
+        } catch (err) {
+          showUploadResults(
+            uploadResultRow(null, false, `Re-scan failed: ${err.message}`),
+          );
+        }
+      });
+
+      let ingestPollTimer = null;
+
+      function startIngestPolling(extraRows = "") {
+        if (ingestPollTimer) return;
+        showUploadProgress("Indexing…", null);
+        let lastDocsRefresh = 0;
+        ingestPollTimer = setInterval(async () => {
+          let s;
+          try {
+            s = await (await fetch("/ingest-status")).json();
+          } catch {
+            return;
+          }
+          if (s.active) {
+            const label = `Indexing ${Math.min(s.completed + 1, s.total)} of ${s.total}`;
+            updateUploadProgress(label, s.total ? s.completed / s.total : null);
+            if (Date.now() - lastDocsRefresh > 5000) {
+              lastDocsRefresh = Date.now();
+              refreshDocs();
+            }
+          } else {
+            clearInterval(ingestPollTimer);
+            ingestPollTimer = null;
+            const results = s.results || [];
+            const failed = results.filter((f) => !f.ok);
+            const okCount = results.length - failed.length;
+            const ordered = [...failed, ...results.filter((f) => f.ok)];
+            const shown = ordered.slice(0, 12);
+            let rows =
+              shown
+                .map((f) =>
+                  f.ok
+                    ? uploadResultRow(
+                        baseName(f.source),
+                        true,
+                        `Ready to search · ${f.chunks} chunk${f.chunks === 1 ? "" : "s"}`,
+                      )
+                    : uploadResultRow(
+                        baseName(f.source),
+                        false,
+                        friendlyUploadError(f.error),
+                      ),
+                )
+                .join("") + extraRows;
+            if (ordered.length > shown.length) {
+              rows += `<div class="up-note">…and ${ordered.length - shown.length} more</div>`;
+            }
+            const note = ingestCancelled
+              ? `Cancelled: ${okCount} file${okCount === 1 ? "" : "s"} indexed before stopping. Use "re-scan folder" to resume.`
+              : `Done: ${okCount} indexed${failed.length ? `, ${failed.length} failed` : ""}.`;
+            ingestCancelled = false;
+            showUploadResults(rows, note);
+            scheduleUploadClear(30000);
+            refreshDocs();
+            checkHealth();
+          }
+        }, 1000);
+      }
+
+      (async () => {
+        try {
+          const s = await (await fetch("/ingest-status")).json();
+          if (s.active) startIngestPolling();
+        } catch {}
+      })();
+
+      const dropzone = $("dropzone");
+      const fileInput = $("file-input");
+
+      dropzone.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files.length) uploadFiles(fileInput.files);
+        fileInput.value = "";
+      });
+      for (const ev of ["dragenter", "dragover"]) {
+        dropzone.addEventListener(ev, (e) => {
+          e.preventDefault();
+          dropzone.classList.add("drag");
+        });
+      }
+      for (const ev of ["dragleave", "drop"]) {
+        dropzone.addEventListener(ev, (e) => {
+          e.preventDefault();
+          dropzone.classList.remove("drag");
+        });
+      }
+      dropzone.addEventListener("drop", (e) => {
+        if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+      });
+
+      let uploadClearTimer = null;
+      let upLabelEl = null;
+      let upBarEl = null;
+
+      function resetUploadStatus() {
+        clearTimeout(uploadClearTimer);
+        uploadStatusEl.classList.remove("fading");
+      }
+
+      function scheduleUploadClear(delay = 10000) {
+        clearTimeout(uploadClearTimer);
+        uploadClearTimer = setTimeout(() => {
+          uploadStatusEl.classList.add("fading");
+          uploadClearTimer = setTimeout(() => {
+            uploadStatusEl.innerHTML = "";
+            uploadStatusEl.classList.remove("fading");
+          }, 700);
+        }, delay);
+      }
+
+      function showUploadProgress(label, fraction) {
+        resetUploadStatus();
+        uploadStatusEl.innerHTML =
+          '<div class="up-progress"><div class="up-head"><div class="up-label"></div>' +
+          '<button type="button" class="up-cancel">Cancel</button></div>' +
+          '<div class="up-track"><div class="up-bar"></div></div></div>';
+        upLabelEl = uploadStatusEl.querySelector(".up-label");
+        upBarEl = uploadStatusEl.querySelector(".up-bar");
+        uploadStatusEl
+          .querySelector(".up-cancel")
+          .addEventListener("click", cancelIngest);
+        updateUploadProgress(label, fraction);
+      }
+
+      let currentUploadXhr = null;
+      let ingestCancelled = false;
+
+      async function cancelIngest() {
+        ingestCancelled = true;
+        if (currentUploadXhr) {
+          try {
+            currentUploadXhr.abort();
+          } catch {}
+        }
+        try {
+          await fetch("/ingest-cancel", { method: "POST" });
+        } catch {}
+        refreshDocs();
+      }
+
+      function updateUploadProgress(label, fraction) {
+        if (!upLabelEl) return;
+        upLabelEl.textContent = label;
+        if (fraction == null) {
+          upBarEl.classList.add("indeterminate");
+          upBarEl.style.width = "100%";
+        } else {
+          upBarEl.classList.remove("indeterminate");
+          upBarEl.style.width = `${Math.round(fraction * 100)}%`;
+        }
+      }
+
+      function friendlyUploadError(error) {
+        const m = /unsupported file type '(.+)'/.exec(error || "");
+        if (m) return `The ${m[1]} file type isn't supported`;
+        if (error === "no extractable text")
+          return "No readable text found in this file";
+        if (error === "invalid filename")
+          return "The file name couldn't be used";
+        return error || "Something went wrong";
+      }
+
+      function uploadResultRow(name, ok, desc) {
+        return (
+          `<div class="up-file ${ok ? "ok" : "err"}">` +
+          `<span class="up-icon">${ok ? "✓" : "✕"}</span>` +
+          `<span class="up-meta">` +
+          (name ? `<span class="up-name">${escapeHtml(name)}</span>` : "") +
+          `<span class="up-desc">${escapeHtml(desc)}</span>` +
+          `</span></div>`
+        );
+      }
+
+      function showUploadResults(rowsHtml, note) {
+        resetUploadStatus();
+        uploadStatusEl.innerHTML =
+          (note ? `<div class="up-note">${escapeHtml(note)}</div>` : "") +
+          rowsHtml;
+        scheduleUploadClear();
+      }
+
+      function uploadWithProgress(fd, onProgress) {
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          currentUploadXhr = xhr;
+          const finish = (fn, arg) => {
+            currentUploadXhr = null;
+            fn(arg);
+          };
+          xhr.open("POST", "/upload");
+          xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) onProgress(e.loaded / e.total);
+          });
+          xhr.addEventListener("load", () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                finish(resolve, JSON.parse(xhr.responseText));
+              } catch {
+                finish(reject, new Error("unexpected server response"));
+              }
+            } else {
+              finish(reject, new Error(xhr.statusText || `HTTP ${xhr.status}`));
+            }
+          });
+          xhr.addEventListener("abort", () =>
+            finish(reject, new Error("cancelled")),
+          );
+          xhr.addEventListener("error", () =>
+            finish(reject, new Error("network error")),
+          );
+          xhr.send(fd);
+        });
+      }
+
+      async function uploadFiles(fileList) {
+        const fd = new FormData();
+        for (const f of fileList) fd.append("files", f);
+        const noun =
+          fileList.length === 1
+            ? fileList[0].name || "1 file"
+            : `${fileList.length} files`;
+        showUploadProgress(`Uploading ${noun}…`, 0);
+        try {
+          const j = await uploadWithProgress(fd, (p) => {
+            if (p < 1) {
+              updateUploadProgress(
+                `Uploading ${noun}… ${Math.round(p * 100)}%`,
+                p,
+              );
+            } else {
+              updateUploadProgress("Queued, starting the indexer…", null);
+            }
+          });
+          const rejectedRows = (j.rejected || [])
+            .map((f) =>
+              uploadResultRow(f.filename, false, friendlyUploadError(f.error)),
+            )
+            .join("");
+          if (j.queued && j.queued.length) {
+            startIngestPolling(rejectedRows);
+          } else {
+            showUploadResults(
+              rejectedRows ||
+                uploadResultRow(null, false, "Nothing was uploaded"),
+            );
+          }
+        } catch (e) {
+          if (e.message === "cancelled") {
+            ingestCancelled = false;
+            showUploadResults("", "Upload cancelled.");
+          } else {
+            showUploadResults(
+              uploadResultRow(null, false, `Upload failed: ${e.message}`),
+            );
+          }
+        }
+      }
+
+      const form = $("ask-form");
+      const questionEl = $("question");
+      const sendBtn = $("send");
+
+      questionEl.addEventListener("input", () => {
+        questionEl.style.height = "auto";
+        questionEl.style.height = Math.min(questionEl.scrollHeight, 140) + "px";
+      });
+      questionEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          form.requestSubmit();
+        }
+      });
+
+      function addMessage(role, html) {
+        $("empty-hint")?.remove();
+        const div = document.createElement("div");
+        div.className = `msg ${role}`;
+        div.innerHTML = html;
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return div;
+      }
+
+      function selectedSources() {
+        const picked = [...docListEl.querySelectorAll("input:checked")].map(
+          (i) => i.value,
+        );
+        return picked.length ? picked : null;
+      }
+
+      function stickToBottom(force) {
+        const nearBottom =
+          messagesEl.scrollHeight -
+            messagesEl.scrollTop -
+            messagesEl.clientHeight <
+          120;
+        if (force || nearBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      async function streamNdjsonInto(pending, resp, timer) {
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let answer = "";
+        let srcs = [];
+        let bubble = null;
+        let lastRender = 0;
+
+        const handleEvent = (ev) => {
+          if (ev.type === "sources") {
+            srcs = ev.sources || [];
+          } else if (ev.type === "token") {
+            answer += ev.text;
+            if (!bubble) {
+              clearInterval(timer);
+              pending.innerHTML = "";
+              bubble = document.createElement("div");
+              bubble.className = "bubble md";
+              pending.appendChild(bubble);
+            }
+            const now = Date.now();
+            if (now - lastRender > 120) {
+              lastRender = now;
+              bubble.innerHTML = renderMarkdown(answer);
+              stickToBottom();
+            }
+          } else if (ev.type === "error") {
+            throw new Error(ev.message || "stream error");
+          }
+        };
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          let nl;
+          while ((nl = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, nl).trim();
+            buf = buf.slice(nl + 1);
+            if (line) handleEvent(JSON.parse(line));
+          }
+        }
+        return { answer: answer.trim(), srcs };
+      }
+
+      function buildLlmHistory() {
+        return history
+          .filter((m) => !m.error && m.text)
+          .slice(-8)
+          .map((m) => ({
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.text,
+          }));
+      }
+
+      function capSources(sources) {
+        return (sources || []).map((s) => ({
+          ...s,
+          text: typeof s.text === "string" ? s.text.slice(0, 1500) : s.text,
+        }));
+      }
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const q = questionEl.value.trim();
+        if (!q || sendBtn.disabled) return;
+
+        const llmHistory = buildLlmHistory();
+
+        questionEl.value = "";
+        questionEl.style.height = "auto";
+        addMessage("user", `<div class="bubble">${escapeHtml(q)}</div>`);
+        pushHistory({ role: "user", text: q });
+        const pending = addMessage(
+          "bot",
+          `<div class="bubble typing">Thinking…</div>`,
+        );
+        const typingEl = pending.querySelector(".typing");
+        const t0 = Date.now();
+        const timer = setInterval(() => {
+          typingEl.textContent = `Thinking… ${Math.round((Date.now() - t0) / 1000)}s`;
+        }, 1000);
+        sendBtn.disabled = true;
+
+        const body = {
+          question: q,
+          min_score: parseFloat($("opt-minscore").value) || 0,
+          answer_style: $("opt-style").value,
+          sources: selectedSources(),
+          history: llmHistory,
+        };
+
+        let answer = "";
+        let srcs = [];
+        try {
+          const r = await fetch("/ask-stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!r.ok || !r.body) {
+            const bodyText = await r.text();
+            let msg;
+            try {
+              msg = JSON.parse(bodyText).detail;
+            } catch {}
+            throw new Error(msg || bodyText.slice(0, 300) || r.statusText);
+          }
+
+          const streamed = await streamNdjsonInto(pending, r, timer);
+          answer = streamed.answer;
+          srcs = streamed.srcs;
+          if (!answer) throw new Error("The model returned an empty answer.");
+          pending.innerHTML = "";
+          const finalBubble = renderAnswerInto(pending, answer);
+          applyCitationTooltips(finalBubble, srcs);
+          pushHistory({ role: "bot", text: answer, sources: capSources(srcs) });
+        } catch (err) {
+          pending.innerHTML = `<div class="bubble error">Request failed: ${escapeHtml(err.message)}</div>`;
+          pushHistory({
+            role: "bot",
+            text: `Request failed: ${err.message}`,
+            error: true,
+          });
+        } finally {
+          clearInterval(timer);
+          sendBtn.disabled = false;
+          stickToBottom(true);
+          questionEl.focus();
+        }
+      });
+
+      const sidebarEl = document.querySelector("aside");
+      const resizerEl = $("sidebar-resizer");
+      const SIDEBAR_KEY = "rag-sidebar-width";
+
+      function clampSidebarWidth(w) {
+        const max = Math.min(560, window.innerWidth * 0.6);
+        return Math.max(220, Math.min(max, w));
+      }
+
+      try {
+        const saved = parseInt(localStorage.getItem(SIDEBAR_KEY), 10);
+        if (saved) sidebarEl.style.width = `${clampSidebarWidth(saved)}px`;
+      } catch {}
+
+      let sidebarDragging = false;
+      resizerEl.addEventListener("pointerdown", (e) => {
+        if (window.matchMedia("(max-width: 720px)").matches) return;
+        sidebarDragging = true;
+        resizerEl.classList.add("dragging");
+        resizerEl.setPointerCapture(e.pointerId);
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "col-resize";
+      });
+      resizerEl.addEventListener("pointermove", (e) => {
+        if (!sidebarDragging) return;
+        sidebarEl.style.width = `${clampSidebarWidth(e.clientX)}px`;
+      });
+      resizerEl.addEventListener("pointerup", () => {
+        if (!sidebarDragging) return;
+        sidebarDragging = false;
+        resizerEl.classList.remove("dragging");
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+        try {
+          localStorage.setItem(
+            SIDEBAR_KEY,
+            parseInt(sidebarEl.style.width, 10),
+          );
+        } catch {}
+      });
+      resizerEl.addEventListener("dblclick", () => {
+        sidebarEl.style.width = "";
+        try {
+          localStorage.removeItem(SIDEBAR_KEY);
+        } catch {}
+      });
+
+      const OPTS_KEY = "rag-options";
+      let history = [];
+      try {
+        localStorage.removeItem("rag-chat-history");
+      } catch {}
+
+      function pushHistory(entry) {
+        history.push(entry);
+        history = history.slice(-50);
+      }
+
+      $("clear-chat").addEventListener("click", () => {
+        if (history.length && !confirm("Clear the chat history?")) return;
+        history = [];
+        messagesEl.innerHTML =
+          '<div class="empty-hint" id="empty-hint">' +
+          "Upload documents on the left, then ask questions about them here. " +
+          "Answers are grounded in your files and cite their sources.</div>";
+      });
+
+      function downloadFile(filename, mime, content) {
+        const blob = new Blob([content], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      function exportStamp() {
+        const d = new Date();
+        const p = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
+      }
+
+      function sourceLine(s) {
+        return `[${s.id}] ${baseName(s.source)} (chunk ${s.chunk}, score ${(s.score ?? 0).toFixed(2)})`;
+      }
+
+      function exportCsv() {
+        const csvEscape = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
+        const rows = [["#", "role", "message", "sources"]];
+        history.forEach((m, i) => {
+          rows.push([
+            i + 1,
+            m.role === "user" ? "user" : "assistant",
+            m.text || "",
+            (m.sources || []).map(sourceLine).join("; "),
+          ]);
+        });
+        const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\r\n");
+        downloadFile(
+          `rag-chat-${exportStamp()}.csv`,
+          "text/csv;charset=utf-8",
+          "﻿" + csv,
+        );
+      }
+
+      function exportJson() {
+        const data = {
+          exported_at: new Date().toISOString(),
+          messages: history,
+        };
+        downloadFile(
+          `rag-chat-${exportStamp()}.json`,
+          "application/json",
+          JSON.stringify(data, null, 2),
+        );
+      }
+
+      function exportHtml() {
+        const parts = [];
+        parts.push(
+          `<!doctype html><html><head><meta charset="utf-8"><title>RAG chat export</title><style>
+  body{font:15px/1.55 system-ui,sans-serif;max-width:780px;margin:32px auto;padding:0 16px;color:#1c1b1a;background:#faf9f7}
+  h1{font-size:20px}
+  .meta{color:#6f6b66;font-size:13px}
+  .m{margin:14px 0;padding:12px 16px;border-radius:12px}
+  .user{background:#2563eb;color:#fff;margin-left:15%}
+  .bot{background:#fff;border:1px solid #e2e0dd;margin-right:15%}
+  .role{font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.65;margin-bottom:4px}
+  .sources{margin-top:8px;font-size:12px;color:#6f6b66;border-top:1px solid #eee;padding-top:6px}
+  pre{background:#f2f0ed;padding:10px;border-radius:8px;overflow-x:auto}
+  code{font-family:ui-monospace,monospace;font-size:.9em}
+  table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px}
+  blockquote{border-left:3px solid #ddd;margin-left:0;padding-left:10px;color:#6f6b66}
+  .error{color:#b91c1c}
+  </style></head><body>`,
+        );
+        parts.push(
+          `<h1>Personal RAG chat export</h1><p class="meta">Exported ${escapeHtml(new Date().toLocaleString())}</p>`,
+        );
+        for (const m of history) {
+          if (m.role === "user") {
+            parts.push(
+              `<div class="m user"><div class="role">You</div>${escapeHtml(m.text || "").replaceAll("\n", "<br>")}</div>`,
+            );
+          } else {
+            const body = m.error
+              ? `<span class="error">${escapeHtml(m.text || "")}</span>`
+              : renderMarkdown(m.text || "");
+            let srcs = "";
+            if (m.sources && m.sources.length) {
+              srcs =
+                `<div class="sources">` +
+                m.sources.map((s) => escapeHtml(sourceLine(s))).join("<br>") +
+                `</div>`;
+            }
+            parts.push(
+              `<div class="m bot"><div class="role">Assistant</div>${body}${srcs}</div>`,
+            );
+          }
+        }
+        parts.push("</body></html>");
+        downloadFile(
+          `rag-chat-${exportStamp()}.html`,
+          "text/html",
+          parts.join("\n"),
+        );
+      }
+
+      const exportMenu = $("export-menu");
+      $("export-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        exportMenu.classList.toggle("open");
+      });
+      document.addEventListener("click", () =>
+        exportMenu.classList.remove("open"),
+      );
+      exportMenu.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-fmt]");
+        if (!btn) return;
+        exportMenu.classList.remove("open");
+        if (!history.length) {
+          alert("There's no chat to export yet.");
+          return;
+        }
+        if (btn.dataset.fmt === "csv") exportCsv();
+        else if (btn.dataset.fmt === "json") exportJson();
+        else exportHtml();
+      });
+
+      try {
+        const o = JSON.parse(localStorage.getItem(OPTS_KEY)) || {};
+        if (o.minscore != null) $("opt-minscore").value = o.minscore;
+        if (o.style) $("opt-style").value = o.style;
+      } catch {}
+      for (const id of ["opt-minscore", "opt-style"]) {
+        $(id).addEventListener("change", () => {
+          try {
+            localStorage.setItem(
+              OPTS_KEY,
+              JSON.stringify({
+                minscore: $("opt-minscore").value,
+                style: $("opt-style").value,
+              }),
+            );
+          } catch {}
+        });
+      }
+
+      if (location.hash === "#mdtest") {
+        const demo = [
+          "## Markdown test",
+          "",
+          "Some **bold**, *italic*, `inline code`, and a [link](https://example.com).",
+          "",
+          "- bullet one [1]",
+          "- bullet two",
+          "",
+          "| Col A | Col B |",
+          "| --- | --- |",
+          "| 1 | 2 |",
+          "",
+          "> A blockquote with a citation [2]",
+          "",
+          "```python",
+          "def hello(name):",
+          '    return f"hi {name}"',
+          "```",
+          "",
+          "Inline math $E = mc^2$ and display math:",
+          "",
+          "$$\\int_0^1 x^2\\,dx = \\tfrac{1}{3}$$",
+          "",
+          "A footnote reference[^1].",
+          "",
+          "[^1]: The footnote body.",
+        ].join("\n");
+        const holder = addMessage("bot", "");
+        const bubble = renderAnswerInto(holder, demo);
+        applyCitationTooltips(bubble, [
+          {
+            id: 1,
+            source: "./docs/example-document.pdf",
+            chunk: 3,
+            score: 0.71,
+            text: "This is the demo passage that citation [1] points at. In real answers this shows the exact chunk of your document that the model used.",
+          },
+          {
+            id: 2,
+            source: "./docs/another-file.md",
+            chunk: 0,
+            score: 0.55,
+            text: "Demo passage for citation [2].",
+          },
+        ]);
+        showUploadResults(
+          uploadResultRow(
+            "quarterly-report-with-a-long-name.pdf",
+            true,
+            "Ready to search · 12 chunks",
+          ) +
+            uploadResultRow(
+              "holiday-photo.png",
+              false,
+              "The .png file type isn't supported",
+            ),
+        );
+      }
+    </script>
+  </body>
+</html>
