@@ -1,5 +1,7 @@
 # Personal Knowledge RAG System
 
+![Screenshot from the RAG GUI.](https://hosting.photobucket.com/bbcfb0d4-be20-44a0-94dc-65bff8947cf2/27c02ed7-1b50-4ab6-8a33-2c6b5c03bb77.png)
+
 Self-hosted Retrieval-Augmented Generation system which turns documents into a private knowledge base accessible through a web UI.
 
 ## Application Overview
