@@ -7,6 +7,46 @@ def load_text(path: str) -> str:
     with open(path, "r", encoding="utf-8", errors="ignore") as f:
         return f.read()
 
+def ocr_pdf(path: str) -> str:
+    try:
+        import pypdfium2 as pdfium
+        import pytesseract
+    except ImportError:
+        return ""
+    parts = []
+    pdf = pdfium.PdfDocument(path)
+    try:
+        for page in pdf:
+            bitmap = page.render(scale=300 / 72)
+            try:
+                parts.append(pytesseract.image_to_string(bitmap.to_pil()))
+            except Exception:
+                parts.append("")
+    finally:
+        pdf.close()
+    return "\n".join(parts)
+
+def extract_pdf_tables(path: str) -> List[str]:
+    try:
+        import pdfplumber
+    except ImportError:
+        return []
+    blocks = []
+    try:
+        with pdfplumber.open(path) as pdf:
+            for pageno, page in enumerate(pdf.pages, 1):
+                for table in page.extract_tables() or []:
+                    rows = []
+                    for row in table:
+                        cells = [(c or "").strip().replace("\n", " ") for c in row]
+                        if any(cells):
+                            rows.append(" | ".join(cells))
+                    if len(rows) > 1:
+                        blocks.append(f"[Table on page {pageno}]\n" + "\n".join(rows))
+    except Exception:
+        return blocks
+    return blocks
+
 def load_pdf(path: str) -> str:
     reader = PdfReader(path)
     parts = []
@@ -15,7 +55,18 @@ def load_pdf(path: str) -> str:
             parts.append(page.extract_text() or "")
         except Exception:
             parts.append("")
-    return "\n".join(parts)
+    text = "\n".join(parts)
+
+    if len(text.strip()) < 20:
+        ocr_text = ocr_pdf(path)
+        if ocr_text.strip():
+            return ocr_text
+        return text
+
+    tables = extract_pdf_tables(path)
+    if tables:
+        text = text + "\n\n" + "\n\n".join(tables)
+    return text
 
 def load_md(path: str) -> str:
     raw = load_text(path)
