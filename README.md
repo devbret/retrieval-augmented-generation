@@ -48,11 +48,13 @@ Below are the required software programs and instructions for installing and usi
 
 9. Add values to the `.env` file: `nano .env`
 
-10. Start the RAG server: `uvicorn rag_server:app --host 0.0.0.0 --port 47821`
+10. Pull the LLM from your `.env` file on the machine running Ollama: `ollama pull mixtral:8x7b`
 
-11. Open the web UI in a browser: `http://127.0.0.1:47821`
+11. Start the RAG server: `uvicorn rag_server:app --host 0.0.0.0 --port 47821`
 
-12. Add your files via the web UI and begin chatting
+12. Open the web UI in a browser: `http://<server-ip>:47821`
+
+13. Add your files via the web UI and begin chatting
 
 ## Other Considerations
 
@@ -67,3 +69,15 @@ This project repo is intended to demonstrate an ability to do the following:
 - Serve a full web UI to any browser on the local network without sending data beyond it
 
 If you have any questions or would like to collaborate, please reach out either on GitHub or via [my website](https://bretbernhoft.com/).
+
+### Please Also Note
+
+The indexer accepts `PDF`, `Markdown` and plain text files. PDFs receive extra processing: pages with no extractable text fall back to OCR through `Tesseract`, and tables are pulled out separately with `pdfplumber` so their contents remain searchable. Files with any other extension are read as plain text.
+
+A `systemd` unit file is included at `deploy/rag.service` for running the server as a background service on Linux. Edit the `User`, `WorkingDirectory` and `ExecStart` paths to match your installation, copy the file to `/etc/systemd/system/`, then enable it with `sudo systemctl enable --now rag`. The server will start automatically at boot and restart itself on failure.
+
+All runtime configuration lives in the `.env` file. `CHROMA_DIR` sets where the vector database is stored and `COLLECTION_NAME` names the collection inside it. `EMBED_MODEL` selects the sentence-transformers embedding model, `RERANK_MODEL` selects the cross-encoder used to re-order search results, and `CHUNK_SIZE` and `CHUNK_OVERLAP` control how documents are split before embedding. `WATCH_DOCS_INTERVAL` sets how often the folder watcher rescans `./docs` for new files. The connection to the language model is configured with `OLLAMA_BASE_URL`, `OLLAMA_MODEL` and `OLLAMA_NUM_CTX`, the last of which sets the context window handed to the model.
+
+Documents can also be indexed from the command line by running `python ingest.py`, which extracts, chunks and embeds everything in `./docs` without the web server running. This is handy for loading a large library before the first launch.
+
+While `Ollama` is the default backend, the server can talk to OpenAI-compatible APIs. Set `LLM_BACKEND=openai` in the `.env` file and fill in `OPENAI_BASE_URL`, `OPENAI_API_KEY` and `OPENAI_MODEL`. This works with self-hosted servers such as `llama.cpp`, `vLLM` or `LM Studio`, as well as hosted providers.
