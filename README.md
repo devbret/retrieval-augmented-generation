@@ -65,10 +65,15 @@ A `systemd` file is included at `deploy/rag.service` for running the server as a
 All configuration lives in the `.env` file:
 
 - `CHROMA_DIR` sets where the vector database is stored and `COLLECTION_NAME` names the collection inside it
+
 - `EMBED_MODEL` selects the sentence-transformers embedding model
+
 - `RERANK_MODEL` selects the cross-encoder used to re-order search results
+
 - `CHUNK_SIZE` and `CHUNK_OVERLAP` control how documents are split before embedding
+
 - `WATCH_DOCS_INTERVAL` sets how often the folder watcher rescans `./docs` for new files
+
 - `OLLAMA_BASE_URL`, `OLLAMA_MODEL` and `OLLAMA_NUM_CTX` configure the connection to the language model
 
 Documents can also be indexed from the command line by running `python ingest.py`, which extracts, chunks and embeds everything in `./docs` without the web server running. This is handy for loading a large library before the first launch.
