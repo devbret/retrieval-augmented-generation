@@ -43,6 +43,8 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "mistral-8x7b-instruct")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral:instruct")
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "50000"))
+CTX_FILL = float(os.getenv("CTX_FILL", "0.45"))
+OVERVIEW_MAX_DOCS = int(os.getenv("OVERVIEW_MAX_DOCS", "1000"))
 
 HISTORY_MAX_TURNS = 8
 
@@ -52,7 +54,7 @@ client = chromadb.PersistentClient(
 )
 collection = client.get_or_create_collection(name=COLLECTION_NAME, metadata={"hnsw:space":"cosine"})
 try:
-    collection.modify(metadata={"hnsw:search_ef": 128})
+    collection.modify(metadata={"hnsw:search_ef": 512})
 except Exception as e:
     print(f"[chroma] note: could not raise search_ef ({e})")
 embedder = SentenceTransformer(EMBED_MODEL)
@@ -293,12 +295,14 @@ def rebuild_bm25():
     ids, docs, metas = res["ids"], res["documents"], res["metadatas"]
     index = BM25Okapi([_bm25_tokenize(d) for d in docs]) if docs else None
     sources = sorted({m.get("source", "unknown") for m in metas})
+    avg_chunk_words = (sum(len(d.split()) for d in docs) / len(docs)) if docs else 0.0
     with _bm25_lock:
         _bm25["index"] = index
         _bm25["ids"] = ids
         _bm25["docs"] = docs
         _bm25["metas"] = metas
         _bm25["sources"] = sources
+        _bm25["avg_chunk_words"] = avg_chunk_words
 
 def library_overview() -> str:
     with _bm25_lock:
@@ -306,8 +310,8 @@ def library_overview() -> str:
     if not sources:
         return "The knowledge base is currently empty."
     names = [os.path.basename(s) for s in sources]
-    shown = "; ".join(names[:150])
-    more = f" (and {len(names) - 150} more)" if len(names) > 150 else ""
+    shown = "; ".join(names[:OVERVIEW_MAX_DOCS])
+    more = f" (and {len(names) - OVERVIEW_MAX_DOCS} more)" if len(names) > OVERVIEW_MAX_DOCS else ""
     return (
         f"The knowledge base contains {len(names)} documents: {shown}{more}. "
         "Only the excerpts most relevant to the current question are provided "
@@ -364,8 +368,13 @@ def retrieve(req: AskReq):
 
     if req.k:
         n_fetch = max(req.k * 4, 20) if reranker is not None else max(req.k * 2, 10)
+        budget = None
     else:
-        n_fetch = 150
+        budget = int(OLLAMA_NUM_CTX * CTX_FILL)
+        with _bm25_lock:
+            avg_w = _bm25.get("avg_chunk_words") or 0.0
+        avg_w = avg_w or (CHUNK_SIZE * 0.75)
+        n_fetch = int(budget / avg_w * 1.5) + 10
     n_fetch = max(1, min(n_fetch, collection.count()))
     res = _query_with_fallback(q_emb, n_fetch, where)
 
@@ -418,16 +427,27 @@ def retrieve(req: AskReq):
     dists = [dists[i] for i in order]
     rerank_scores = [scores[i] for i in order] if scores else [None] * len(docs)
 
+    ranked = list(zip(docs, metas, dists, rerank_scores))
+    if budget is not None:
+        seen_src, first_per_doc, remainder = set(), [], []
+        for item in ranked:
+            src = item[1].get("source")
+            if src in seen_src:
+                remainder.append(item)
+            else:
+                seen_src.add(src)
+                first_per_doc.append(item)
+        ranked = first_per_doc + remainder
+
     f_docs, f_metas, f_dists, f_rr = [], [], [], []
-    budget = None if req.k else int(OLLAMA_NUM_CTX * 0.45)
     used = 0
-    for d, m, dist, rr in zip(docs, metas, dists, rerank_scores):
+    for d, m, dist, rr in ranked:
         if 1.0 - float(dist) < req.min_score:
             continue
         if budget is not None:
             w = len(d.split())
             if f_docs and used + w > budget:
-                break
+                continue
             used += w
         f_docs.append(d)
         f_metas.append(m)
