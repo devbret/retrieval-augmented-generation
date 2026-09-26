@@ -216,12 +216,60 @@ function renderAnswerInto(container, markdownText) {
   return bubble;
 }
 
+function clearBubbles(msgEl) {
+  msgEl.querySelectorAll(":scope > .bubble").forEach((b) => b.remove());
+}
+
+function createThinkingFeed(container, t0) {
+  const details = document.createElement("details");
+  details.className = "thinking live";
+  details.open = true;
+  const summary = document.createElement("summary");
+  const body = document.createElement("div");
+  body.className = "thinking-body";
+  details.append(summary, body);
+  container.prepend(details);
+
+  let raw = "";
+  let renderTimer = null;
+  const render = () => {
+    renderTimer = null;
+    const atBottom =
+      body.scrollHeight - body.scrollTop - body.clientHeight < 24;
+    body.innerHTML = renderMarkdown(raw.trim());
+    if (atBottom) body.scrollTop = body.scrollHeight;
+    stickToBottom();
+  };
+
+  const seconds = () => Math.round((Date.now() - t0) / 1000);
+  const tick = () => (summary.textContent = `Thinking... ${seconds()}s`);
+  tick();
+  const timer = setInterval(tick, 1000);
+
+  return {
+    append(chunk) {
+      raw += chunk;
+      if (!renderTimer) renderTimer = setTimeout(render, 120);
+    },
+    finish() {
+      if (!details.classList.contains("live")) return;
+      clearInterval(timer);
+      clearTimeout(renderTimer);
+      render();
+      enhanceCodeBlocks(body);
+      details.classList.remove("live");
+      details.open = false;
+      summary.textContent = `Thought for ${seconds()}s`;
+    },
+  };
+}
+
 function applyCitationTooltips(root, sources) {
   if (!sources || !sources.length) return;
   const byId = new Map(
     sources.map((s) => [
       s.id,
-      `${baseName(s.source)}\nchunk ${s.chunk} · score ${s.score.toFixed(2)}`,
+      `${baseName(s.source)}\nchunk ${s.chunk} | score ${s.score.toFixed(2)}`,
     ]),
   );
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -294,7 +342,7 @@ function showPassages(ids, sources) {
     div.className = "passage";
     const meta = document.createElement("div");
     meta.className = "passage-meta";
-    meta.textContent = `[${s.id}] ${baseName(s.source)} · chunk ${s.chunk} · score ${s.score.toFixed(2)}`;
+    meta.textContent = `[${s.id}] ${baseName(s.source)} | chunk ${s.chunk} | score ${s.score.toFixed(2)}`;
     const body = document.createElement("div");
     body.className = "passage-text";
     body.textContent =
@@ -307,7 +355,7 @@ function showPassages(ids, sources) {
 
 async function openDocPreview(source) {
   openModal(baseName(source));
-  modalBody.textContent = "Loading extracted text…";
+  modalBody.textContent = "Loading extracted text...";
   try {
     const r = await fetch(
       `/document-text?source=${encodeURIComponent(source)}`,
@@ -322,7 +370,7 @@ async function openDocPreview(source) {
     head.style.justifyContent = "space-between";
     head.style.alignItems = "center";
     const meta = document.createElement("span");
-    meta.textContent = `${j.chunks} chunk${j.chunks === 1 ? "" : "s"} indexed${j.truncated ? " · preview truncated" : ""}`;
+    meta.textContent = `${j.chunks} chunk${j.chunks === 1 ? "" : "s"} indexed${j.truncated ? " | preview truncated" : ""}`;
     const sumBtn = document.createElement("button");
     sumBtn.className = "modal-btn";
     sumBtn.type = "button";
@@ -344,24 +392,24 @@ async function openDocPreview(source) {
 async function summarizeDoc(source) {
   if (sendBtn.disabled) return;
   closeModal();
-  const label = `Summarize “${baseName(source)}”`;
+  const label = `Summarize "${baseName(source)}"`;
   addMessage("user", `<div class="bubble">${escapeHtml(label)}</div>`);
   pushHistory({ role: "user", text: label });
   const pending = addMessage(
     "bot",
-    `<div class="bubble typing">Summarizing…</div>`,
+    `<div class="bubble typing">Summarizing...</div>`,
   );
   const typingEl = pending.querySelector(".typing");
   const t0 = Date.now();
   const timer = setInterval(() => {
-    typingEl.textContent = `Summarizing… ${Math.round((Date.now() - t0) / 1000)}s`;
+    typingEl.textContent = `Summarizing... ${Math.round((Date.now() - t0) / 1000)}s`;
   }, 1000);
   sendBtn.disabled = true;
   try {
     const r = await fetch("/summarize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ source, think: $("opt-think").checked }),
     });
     if (!r.ok || !r.body) {
       const bodyText = await r.text();
@@ -371,13 +419,22 @@ async function summarizeDoc(source) {
       } catch {}
       throw new Error(msg || bodyText.slice(0, 300) || r.statusText);
     }
-    const { answer } = await streamNdjsonInto(pending, r, timer);
+    const streamed = await streamNdjsonInto(pending, r, timer, t0);
+    const answer = streamed.answer;
     if (!answer) throw new Error("The model returned an empty summary.");
-    pending.innerHTML = "";
+    clearBubbles(pending);
     renderAnswerInto(pending, answer);
-    pushHistory({ role: "bot", text: answer });
+    pushHistory({
+      role: "bot",
+      text: answer,
+      thinking: streamed.thinking || undefined,
+    });
   } catch (err) {
-    pending.innerHTML = `<div class="bubble error">Summarize failed: ${escapeHtml(err.message)}</div>`;
+    clearBubbles(pending);
+    pending.insertAdjacentHTML(
+      "beforeend",
+      `<div class="bubble error">Summarize failed: ${escapeHtml(err.message)}</div>`,
+    );
     pushHistory({
       role: "bot",
       text: `Summarize failed: ${err.message}`,
@@ -399,15 +456,15 @@ async function checkHealth() {
     const j = await r.json();
     if (j.llm && j.llm.reachable === false) {
       dot.className = "warn";
-      label.textContent = `can't reach Ollama, is the AI PC up? · ${j.documents} docs`;
+      label.textContent = `can't reach Ollama, is the AI PC up? | ${j.documents} docs`;
     } else if (j.llm && j.llm.model_available === false) {
       dot.className = "warn";
       label.textContent = `model "${j.model}" not found on Ollama, check .env`;
     } else {
       dot.className = "up";
       label.textContent = j.model
-        ? `online · ${j.model} · ${j.documents} docs · ${j.chunks} chunks`
-        : `online · collection: ${j.collection}`;
+        ? `online | ${j.model} | ${j.documents} docs | ${j.chunks} chunks`
+        : `online | collection: ${j.collection}`;
     }
     if (j.indexing && !ingestPollTimer) startIngestPolling();
   } catch {
@@ -446,8 +503,8 @@ async function refreshDocs() {
          ${checked.has(d.source) ? "checked" : ""}>
   <span class="name">${escapeHtml(baseName(d.source))}</span>
 </label>
-<button class="doc-view" title="View extracted text">👁</button>
-<button class="doc-del" title="Delete document">✕</button>`;
+<button class="doc-view" title="View extracted text">view</button>
+<button class="doc-del" title="Delete document">x</button>`;
     li.querySelector(".doc-view").addEventListener("click", () =>
       openDocPreview(d.source),
     );
@@ -514,7 +571,7 @@ $("delete-all").addEventListener("click", async () => {
 
 $("rescan").addEventListener("click", async (e) => {
   e.preventDefault();
-  showUploadProgress("Scanning the docs folder…", null);
+  showUploadProgress("Scanning the docs folder...", null);
   try {
     const r = await fetch("/rescan", { method: "POST" });
     if (!r.ok) throw new Error(r.statusText);
@@ -538,7 +595,7 @@ let ingestPollTimer = null;
 
 function startIngestPolling(extraRows = "") {
   if (ingestPollTimer) return;
-  showUploadProgress("Indexing…", null);
+  showUploadProgress("Indexing...", null);
   let lastDocsRefresh = 0;
   ingestPollTimer = setInterval(async () => {
     let s;
@@ -569,7 +626,7 @@ function startIngestPolling(extraRows = "") {
               ? uploadResultRow(
                   baseName(f.source),
                   true,
-                  `Ready to search · ${f.chunks} chunk${f.chunks === 1 ? "" : "s"}`,
+                  `Ready to search | ${f.chunks} chunk${f.chunks === 1 ? "" : "s"}`,
                 )
               : uploadResultRow(
                   baseName(f.source),
@@ -579,7 +636,7 @@ function startIngestPolling(extraRows = "") {
           )
           .join("") + extraRows;
       if (ordered.length > shown.length) {
-        rows += `<div class="up-note">…and ${ordered.length - shown.length} more</div>`;
+        rows += `<div class="up-note">...and ${ordered.length - shown.length} more</div>`;
       }
       const note = ingestCancelled
         ? `Cancelled: ${okCount} file${okCount === 1 ? "" : "s"} indexed before stopping. Use "re-scan folder" to resume.`
@@ -699,7 +756,7 @@ function friendlyUploadError(error) {
 function uploadResultRow(name, ok, desc) {
   return (
     `<div class="up-file ${ok ? "ok" : "err"}">` +
-    `<span class="up-icon">${ok ? "✓" : "✕"}</span>` +
+    `<span class="up-icon">${ok ? "ok" : "x"}</span>` +
     `<span class="up-meta">` +
     (name ? `<span class="up-name">${escapeHtml(name)}</span>` : "") +
     `<span class="up-desc">${escapeHtml(desc)}</span>` +
@@ -755,16 +812,16 @@ async function uploadFiles(fileList) {
     fileList.length === 1
       ? fileList[0].name || "1 file"
       : `${fileList.length} files`;
-  showUploadProgress(`Uploading ${noun}…`, 0);
+  showUploadProgress(`Uploading ${noun}...`, 0);
   try {
     const j = await uploadWithProgress(fd, (p) => {
       if (p < 1) {
         updateUploadProgress(
-          `Uploading ${noun}… ${Math.round(p * 100)}%`,
+          `Uploading ${noun}... ${Math.round(p * 100)}%`,
           p,
         );
       } else {
-        updateUploadProgress("Queued, starting the indexer…", null);
+        updateUploadProgress("Queued, starting the indexer...", null);
       }
     });
     const rejectedRows = (j.rejected || [])
@@ -833,23 +890,34 @@ function stickToBottom(force) {
   if (force || nearBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-async function streamNdjsonInto(pending, resp, timer) {
+async function streamNdjsonInto(pending, resp, timer, t0) {
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
   let answer = "";
+  let thinking = "";
   let srcs = [];
   let bubble = null;
+  let feed = null;
   let lastRender = 0;
 
   const handleEvent = (ev) => {
     if (ev.type === "sources") {
       srcs = ev.sources || [];
+    } else if (ev.type === "thinking") {
+      thinking += ev.text;
+      if (!feed) {
+        clearInterval(timer);
+        pending.querySelector(".typing")?.remove();
+        feed = createThinkingFeed(pending, t0);
+      }
+      feed.append(ev.text);
     } else if (ev.type === "token") {
       answer += ev.text;
       if (!bubble) {
         clearInterval(timer);
-        pending.innerHTML = "";
+        feed?.finish();
+        pending.querySelector(".typing")?.remove();
         bubble = document.createElement("div");
         bubble.className = "bubble md";
         pending.appendChild(bubble);
@@ -865,18 +933,22 @@ async function streamNdjsonInto(pending, resp, timer) {
     }
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let nl;
-    while ((nl = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, nl).trim();
-      buf = buf.slice(nl + 1);
-      if (line) handleEvent(JSON.parse(line));
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (line) handleEvent(JSON.parse(line));
+      }
     }
+  } finally {
+    feed?.finish();
   }
-  return { answer: answer.trim(), srcs };
+  return { answer: answer.trim(), thinking: thinking.trim(), srcs };
 }
 
 function buildLlmHistory() {
@@ -909,12 +981,12 @@ form.addEventListener("submit", async (e) => {
   pushHistory({ role: "user", text: q });
   const pending = addMessage(
     "bot",
-    `<div class="bubble typing">Thinking…</div>`,
+    `<div class="bubble typing">Thinking...</div>`,
   );
   const typingEl = pending.querySelector(".typing");
   const t0 = Date.now();
   const timer = setInterval(() => {
-    typingEl.textContent = `Thinking… ${Math.round((Date.now() - t0) / 1000)}s`;
+    typingEl.textContent = `Thinking... ${Math.round((Date.now() - t0) / 1000)}s`;
   }, 1000);
   sendBtn.disabled = true;
 
@@ -922,6 +994,7 @@ form.addEventListener("submit", async (e) => {
     question: q,
     min_score: parseFloat($("opt-minscore").value) || 0,
     answer_style: $("opt-style").value,
+    think: $("opt-think").checked,
     sources: selectedSources(),
     history: llmHistory,
   };
@@ -943,16 +1016,25 @@ form.addEventListener("submit", async (e) => {
       throw new Error(msg || bodyText.slice(0, 300) || r.statusText);
     }
 
-    const streamed = await streamNdjsonInto(pending, r, timer);
+    const streamed = await streamNdjsonInto(pending, r, timer, t0);
     answer = streamed.answer;
     srcs = streamed.srcs;
     if (!answer) throw new Error("The model returned an empty answer.");
-    pending.innerHTML = "";
+    clearBubbles(pending);
     const finalBubble = renderAnswerInto(pending, answer);
     applyCitationTooltips(finalBubble, srcs);
-    pushHistory({ role: "bot", text: answer, sources: capSources(srcs) });
+    pushHistory({
+      role: "bot",
+      text: answer,
+      thinking: streamed.thinking || undefined,
+      sources: capSources(srcs),
+    });
   } catch (err) {
-    pending.innerHTML = `<div class="bubble error">Request failed: ${escapeHtml(err.message)}</div>`;
+    clearBubbles(pending);
+    pending.insertAdjacentHTML(
+      "beforeend",
+      `<div class="bubble error">Request failed: ${escapeHtml(err.message)}</div>`,
+    );
     pushHistory({
       role: "bot",
       text: `Request failed: ${err.message}`,
@@ -1057,20 +1139,21 @@ function sourceLine(s) {
 
 function exportCsv() {
   const csvEscape = (v) => `"${String(v ?? "").replaceAll('"', '""')}"`;
-  const rows = [["#", "role", "message", "sources"]];
+  const rows = [["#", "role", "message", "sources", "thinking"]];
   history.forEach((m, i) => {
     rows.push([
       i + 1,
       m.role === "user" ? "user" : "assistant",
       m.text || "",
       (m.sources || []).map(sourceLine).join("; "),
+      m.thinking || "",
     ]);
   });
   const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\r\n");
   downloadFile(
     `rag-chat-${exportStamp()}.csv`,
     "text/csv;charset=utf-8",
-    "﻿" + csv,
+    "\uFEFF" + csv,
   );
 }
 
@@ -1103,6 +1186,9 @@ function exportHtml() {
   table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px}
   blockquote{border-left:3px solid #ddd;margin-left:0;padding-left:10px;color:#6f6b66}
   .error{color:#b91c1c}
+  .thinking{margin-bottom:8px;color:#6f6b66;font-size:13px}
+  .thinking summary{cursor:pointer}
+  .thinking>div{margin-top:6px;padding-left:10px;border-left:2px solid #e2e0dd}
   </style></head><body>`,
   );
   parts.push(
@@ -1124,8 +1210,11 @@ function exportHtml() {
           m.sources.map((s) => escapeHtml(sourceLine(s))).join("<br>") +
           `</div>`;
       }
+      const thinking = m.thinking
+        ? `<details class="thinking"><summary>Thinking</summary><div>${renderMarkdown(m.thinking)}</div></details>`
+        : "";
       parts.push(
-        `<div class="m bot"><div class="role">Assistant</div>${body}${srcs}</div>`,
+        `<div class="m bot"><div class="role">Assistant</div>${thinking}${body}${srcs}</div>`,
       );
     }
   }
@@ -1162,8 +1251,9 @@ try {
   const o = JSON.parse(localStorage.getItem(OPTS_KEY)) || {};
   if (o.minscore != null) $("opt-minscore").value = o.minscore;
   if (o.style) $("opt-style").value = o.style;
+  if (o.think != null) $("opt-think").checked = o.think;
 } catch {}
-for (const id of ["opt-minscore", "opt-style"]) {
+for (const id of ["opt-minscore", "opt-style", "opt-think"]) {
   $(id).addEventListener("change", () => {
     try {
       localStorage.setItem(
@@ -1171,6 +1261,7 @@ for (const id of ["opt-minscore", "opt-style"]) {
         JSON.stringify({
           minscore: $("opt-minscore").value,
           style: $("opt-style").value,
+          think: $("opt-think").checked,
         }),
       );
     } catch {}
@@ -1206,6 +1297,14 @@ if (location.hash === "#mdtest") {
     "[^1]: The footnote body.",
   ].join("\n");
   const holder = addMessage("bot", "");
+  const feed = createThinkingFeed(holder, Date.now() - 4000);
+  feed.append(
+    "The user wants to see **every formatting feature** at once.\n\n" +
+      "- Cover emphasis, lists and a table\n" +
+      "- Add a `code` block, math like $x^2$ and a footnote\n\n" +
+      "Cite [1] and [2] where they apply.",
+  );
+  feed.finish();
   const bubble = renderAnswerInto(holder, demo);
   applyCitationTooltips(bubble, [
     {
@@ -1227,7 +1326,7 @@ if (location.hash === "#mdtest") {
     uploadResultRow(
       "quarterly-report-with-a-long-name.pdf",
       true,
-      "Ready to search · 12 chunks",
+      "Ready to search | 12 chunks",
     ) +
       uploadResultRow(
         "holiday-photo.png",

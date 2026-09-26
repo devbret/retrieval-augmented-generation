@@ -11,10 +11,10 @@
     <header>
       <h1>Personal RAG</h1>
       <span id="status-dot"></span>
-      <span id="status-label">connecting…</span>
+      <span id="status-label">connecting...</span>
       <div id="export-wrap">
         <button id="export-btn" type="button" title="Download this chat">
-          Export ▾
+          Export
         </button>
         <div id="export-menu">
           <button type="button" data-fmt="csv">CSV</button>
@@ -42,7 +42,7 @@
         </h2>
         <div id="dropzone">
           <strong>Drop files here</strong> or click to browse<br />
-          .txt · .md · .pdf · .csv · .json · .html<br />
+          .txt, .md, .pdf, .csv, .json, .html<br />
           <span style="font-size: 11.5px"
             >Files copied into the docs folder are indexed automatically.</span
           >
@@ -59,7 +59,7 @@
         <h2>
           Documents
           <span class="h2-links">
-            <a href="#" id="filter-all">all</a> ·
+            <a href="#" id="filter-all">all</a> |
             <a href="#" id="filter-none">none</a>
           </span>
         </h2>
@@ -71,7 +71,7 @@
 
       <div
         id="sidebar-resizer"
-        title="Drag to resize · double-click to reset"
+        title="Drag to resize, double-click to reset"
       ></div>
 
       <div id="chat-col">
@@ -86,7 +86,7 @@
             <textarea
               id="question"
               rows="1"
-              placeholder="Ask about your documents… (Enter to send, Shift+Enter for newline)"
+              placeholder="Ask about your documents... (Enter to send, Shift+Enter for newline)"
             ></textarea>
             <button id="send" type="submit">Send</button>
           </form>
@@ -109,6 +109,11 @@
                 <option value="bullets">Bullets</option>
               </select>
             </label>
+            <label
+              title="Let the model reason before it answers and stream that reasoning into the chat. Answers take longer. Needs a model with thinking support."
+              ><input id="opt-think" type="checkbox" checked />
+              Thinking
+            </label>
           </div>
         </div>
       </div>
@@ -118,7 +123,7 @@
       <div id="modal">
         <div id="modal-head">
           <span id="modal-title"></span>
-          <button id="modal-close" type="button" title="Close">✕</button>
+          <button id="modal-close" type="button" title="Close">x</button>
         </div>
         <div id="modal-body"></div>
       </div>

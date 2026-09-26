@@ -76,7 +76,7 @@ def ingest_path(docs_dir: str = DOCS_DIR) -> int:
     print(f"Embedding {len(to_add_texts)} chunks with {EMBED_MODEL} ...")
     embeddings = embedder.encode(to_add_texts, batch_size=64, show_progress_bar=True)
 
-    print("Writing to Chroma…")
+    print("Writing to Chroma...")
     collection.add(
         ids=to_add_ids,
         embeddings=embeddings,
