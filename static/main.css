@@ -271,12 +271,7 @@ aside h2 {
   transition: width 0.2s;
 }
 .up-bar.indeterminate {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--accent),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
   background-size: 40% 100%;
   background-repeat: no-repeat;
   animation: up-slide 1.2s linear infinite;
@@ -509,54 +504,114 @@ aside h2 {
   color: var(--muted);
   font-style: italic;
 }
-
-.bubble.md {
+.thinking {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.thinking summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bot-bubble);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.thinking summary::-webkit-details-marker {
+  display: none;
+}
+.thinking summary::before {
+  content: ">";
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+.thinking[open] summary::before {
+  transform: rotate(90deg);
+}
+.thinking summary:hover {
+  color: var(--text);
+}
+.thinking summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.thinking.live summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: think-pulse 1.2s ease-in-out infinite;
+}
+@keyframes think-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.thinking-body {
+  margin: 6px 0 0 11px;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--border);
+  max-height: 260px;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking.live summary::after {
+    animation: none;
+  }
+}
+:is(.bubble.md, .thinking-body) {
   white-space: normal;
 }
-.bubble.md > :first-child {
+:is(.bubble.md, .thinking-body) > :first-child {
   margin-top: 0;
 }
-.bubble.md > :last-child {
+:is(.bubble.md, .thinking-body) > :last-child {
   margin-bottom: 0;
 }
-.bubble.md p,
-.bubble.md ul,
-.bubble.md ol,
-.bubble.md table,
-.bubble.md blockquote {
+:is(.bubble.md, .thinking-body) p,
+:is(.bubble.md, .thinking-body) ul,
+:is(.bubble.md, .thinking-body) ol,
+:is(.bubble.md, .thinking-body) table,
+:is(.bubble.md, .thinking-body) blockquote {
   margin: 8px 0;
 }
-.bubble.md h1,
-.bubble.md h2,
-.bubble.md h3,
-.bubble.md h4 {
+:is(.bubble.md, .thinking-body) h1,
+:is(.bubble.md, .thinking-body) h2,
+:is(.bubble.md, .thinking-body) h3,
+:is(.bubble.md, .thinking-body) h4 {
   margin: 14px 0 6px;
   line-height: 1.3;
 }
-.bubble.md h1 {
+:is(.bubble.md, .thinking-body) h1 {
   font-size: 1.25em;
 }
-.bubble.md h2 {
+:is(.bubble.md, .thinking-body) h2 {
   font-size: 1.15em;
 }
-.bubble.md h3 {
+:is(.bubble.md, .thinking-body) h3 {
   font-size: 1.05em;
 }
-.bubble.md ul,
-.bubble.md ol {
+:is(.bubble.md, .thinking-body) ul,
+:is(.bubble.md, .thinking-body) ol {
   padding-left: 22px;
 }
-.bubble.md li {
+:is(.bubble.md, .thinking-body) li {
   margin: 3px 0;
 }
-.bubble.md code {
+:is(.bubble.md, .thinking-body) code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.9em;
   background: color-mix(in srgb, var(--text) 8%, transparent);
   padding: 1px 5px;
   border-radius: 5px;
 }
-.bubble.md pre {
+:is(.bubble.md, .thinking-body) pre {
   margin: 8px 0;
   background: color-mix(in srgb, var(--text) 5%, transparent);
   border: 1px solid var(--border);
@@ -564,35 +619,35 @@ aside h2 {
   padding: 10px 12px;
   overflow-x: auto;
 }
-.bubble.md pre code {
+:is(.bubble.md, .thinking-body) pre code {
   background: none;
   padding: 0;
   font-size: 12.5px;
 }
-.bubble.md blockquote {
+:is(.bubble.md, .thinking-body) blockquote {
   border-left: 3px solid var(--border);
   padding-left: 10px;
   color: var(--muted);
 }
-.bubble.md table {
+:is(.bubble.md, .thinking-body) table {
   border-collapse: collapse;
   display: block;
   overflow-x: auto;
 }
-.bubble.md th,
-.bubble.md td {
+:is(.bubble.md, .thinking-body) th,
+:is(.bubble.md, .thinking-body) td {
   border: 1px solid var(--border);
   padding: 4px 8px;
 }
-.bubble.md a {
+:is(.bubble.md, .thinking-body) a {
   color: var(--accent);
 }
-.bubble.md hr {
+:is(.bubble.md, .thinking-body) hr {
   border: none;
   border-top: 1px solid var(--border);
   margin: 10px 0;
 }
-.bubble.md .katex-display {
+:is(.bubble.md, .thinking-body) .katex-display {
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -831,6 +886,10 @@ aside h2 {
 }
 #options input[type="number"] {
   width: 60px;
+}
+#options input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 @media (max-width: 720px) {

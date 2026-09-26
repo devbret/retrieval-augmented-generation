@@ -81,6 +81,7 @@ class AskReq(BaseModel):
     sources: Optional[List[str]] = None
 
     answer_style: str = "default"
+    think: bool = False
 
     history: Optional[List[dict]] = None
 
@@ -92,6 +93,7 @@ class SummarizeReq(BaseModel):
     source: str
     max_tokens: int = -1
     temperature: float = 0.2
+    think: bool = False
 
 SYSTEM = (
     "You are a concise assistant. Use ONLY the provided context and the prior "
@@ -210,12 +212,12 @@ def call_ollama(messages: List[dict], max_tokens: int, temperature: float) -> st
 
     return json.dumps(data)
 
-def stream_ollama(messages: List[dict], max_tokens: int, temperature: float):
+def stream_ollama(messages: List[dict], max_tokens: int, temperature: float, think: bool = False):
     chat_payload = {
         "model": OLLAMA_MODEL,
         "options": _ollama_options(max_tokens, temperature),
         "messages": messages,
-        "think": False,
+        "think": think,
         "stream": True,
     }
     chat_url = f"{OLLAMA_BASE_URL}/api/chat"
@@ -226,7 +228,7 @@ def stream_ollama(messages: List[dict], max_tokens: int, temperature: float):
         r = requests.post(chat_url, json=chat_payload, stream=True, timeout=300)
 
     if r.status_code == 404:
-        yield call_ollama(messages, max_tokens, temperature)
+        yield "token", call_ollama(messages, max_tokens, temperature)
         return
 
     r.raise_for_status()
@@ -234,9 +236,11 @@ def stream_ollama(messages: List[dict], max_tokens: int, temperature: float):
         if not line:
             continue
         data = json.loads(line)
-        tok = data.get("message", {}).get("content", "")
-        if tok:
-            yield tok
+        msg = data.get("message", {})
+        if msg.get("thinking"):
+            yield "thinking", msg["thinking"]
+        if msg.get("content"):
+            yield "token", msg["content"]
         if data.get("done"):
             break
 
@@ -811,8 +815,8 @@ def summarize(req: SummarizeReq = Body(...)):
                 )},
             ]
             if LLM_BACKEND == "ollama":
-                for tok in stream_ollama(msgs, req.max_tokens, req.temperature):
-                    yield event({"type": "token", "text": tok})
+                for kind, text in stream_ollama(msgs, req.max_tokens, req.temperature, think=req.think):
+                    yield event({"type": kind, "text": text})
             else:
                 yield event({"type": "token", "text": call_openai_like(msgs, req.max_tokens, req.temperature)})
             yield event({"type": "done"})
@@ -850,8 +854,8 @@ def ask_stream(req: AskReq = Body(...)):
         messages = build_messages(prompt, req.history)
         try:
             if LLM_BACKEND == "ollama":
-                for tok in stream_ollama(messages, req.max_tokens, req.temperature):
-                    yield event({"type": "token", "text": tok})
+                for kind, text in stream_ollama(messages, req.max_tokens, req.temperature, think=req.think):
+                    yield event({"type": kind, "text": text})
             else:
                 answer = call_openai_like(messages, req.max_tokens, req.temperature)
                 yield event({"type": "token", "text": answer})
